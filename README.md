@@ -1,6 +1,6 @@
 # Home Media Library
 
-A mobile app to keep track of your home's media collection. Starting with movies and books — more media types coming later.
+A mobile app to keep track of your home's media collection — movies, books, and Magic: The Gathering.
 
 ## Getting started
 
@@ -12,8 +12,8 @@ npm install
 
 2. Create a [Supabase](https://supabase.com) project, then run SQL:
 
-- **New project:** run [`supabase/schema.sql`](./supabase/schema.sql) (Phases 1–4)
-- **Already on Phase 3:** run [`supabase/phase4.sql`](./supabase/phase4.sql)
+- **New project:** run [`supabase/schema.sql`](./supabase/schema.sql) (Phases 1–5)
+- **Already on Phase 4:** run [`supabase/phase5.sql`](./supabase/phase5.sql)
 
 3. For local testing, disable email confirmation:
 
@@ -36,27 +36,25 @@ npm run ios
 
 Or scan the QR code with Expo Go after running `npm start`.
 
-## Features (Phases 1–4)
+## Features (Phases 1–5)
 
 - Email/password accounts (Supabase Auth)
 - Households with admin / member roles + short invite code
-- Movies: TMDb search, ownership toggles (Blu-ray / 4K / Digital + platform)
+- Movies: TMDb search, ownership toggles, barcode UPC lookup
 - Books: ISBN barcode → Open Library
-- Barcode scan for discs (UPC → TMDb) and books (ISBN)
 - Checkout / lending with free-text borrower names
-- Library filters: All / Available / Checked out
-- Admin-only delete (RLS)
+- MTG: Scryfall collection search/add (qty + foil)
+- Commander decks + Archidekt import (resolves cards via Scryfall)
+- Admin-only delete for catalog items (RLS)
 - Light and dark mode
 
 ## Database setup
 
-1. **New project:** run [`supabase/schema.sql`](./supabase/schema.sql)
-2. **Incremental:** run `phase2.sql` → `phase3.sql` → [`phase4.sql`](./supabase/phase4.sql) as needed
-3. Disable email confirmation under **Authentication → Providers → Email** for local testing
+Incremental migrations live in `supabase/phase2.sql` … `phase5.sql` if you applied earlier phases already.
 
 ## Tech stack
 
 - Expo (React Native) + TypeScript — SDK 57
 - Expo Router + expo-camera (barcode)
 - Supabase (Auth + Postgres + RLS)
-- TMDb, Open Library, UPCitemdb (trial) for lookups
+- TMDb, Open Library, UPCitemdb, Scryfall, Archidekt

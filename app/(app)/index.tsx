@@ -18,11 +18,14 @@ import { SearchInput } from '../../components/SearchInput';
 import { Book, searchBooksInLibrary } from '../../lib/books';
 import { Checkout, getActiveCheckoutsByItemIds } from '../../lib/checkouts';
 import { searchMoviesInLibrary } from '../../lib/movies';
+import { MtgCard, searchMtgCollection, updateMtgCardQty } from '../../lib/mtgCards';
+import { listMtgDecks, MtgDeck } from '../../lib/mtgDecks';
 import { radius, spacing, useTheme } from '../../lib/theme';
 import { Movie } from '../../lib/types';
 
-type LibraryTab = 'movies' | 'books';
+type LibraryTab = 'movies' | 'books' | 'mtg';
 type AvailabilityFilter = 'all' | 'available' | 'out';
+type MtgMode = 'collection' | 'decks';
 
 export default function LibraryScreen() {
   const router = useRouter();
@@ -31,24 +34,37 @@ export default function LibraryScreen() {
   const { colors } = useTheme();
   const [tab, setTab] = useState<LibraryTab>('movies');
   const [availability, setAvailability] = useState<AvailabilityFilter>('all');
+  const [mtgMode, setMtgMode] = useState<MtgMode>('collection');
   const [movies, setMovies] = useState<Movie[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
+  const [mtgCards, setMtgCards] = useState<MtgCard[]>([]);
+  const [mtgDecks, setMtgDecks] = useState<MtgDeck[]>([]);
   const [checkouts, setCheckouts] = useState<Map<string, Checkout>>(new Map());
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(
-    async (searchQuery: string, activeTab: LibraryTab) => {
+    async (searchQuery: string, activeTab: LibraryTab, mode: MtgMode) => {
       setLoading(true);
       try {
         if (activeTab === 'movies') {
           const results = await searchMoviesInLibrary(searchQuery);
           setMovies(results);
           setCheckouts(await getActiveCheckoutsByItemIds('movie', results.map((m) => m.id)));
-        } else {
+        } else if (activeTab === 'books') {
           const results = await searchBooksInLibrary(searchQuery);
           setBooks(results);
           setCheckouts(await getActiveCheckoutsByItemIds('book', results.map((b) => b.id)));
+        } else if (mode === 'collection') {
+          setMtgCards(await searchMtgCollection(searchQuery));
+        } else {
+          const decks = await listMtgDecks();
+          const trimmed = searchQuery.trim().toLowerCase();
+          setMtgDecks(
+            trimmed
+              ? decks.filter((d) => d.name.toLowerCase().includes(trimmed))
+              : decks,
+          );
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Could not load library.';
@@ -62,8 +78,8 @@ export default function LibraryScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      load(query, tab);
-    }, [load, query, tab]),
+      load(query, tab, mtgMode);
+    }, [load, query, tab, mtgMode]),
   );
 
   useLayoutEffect(() => {
@@ -90,38 +106,30 @@ export default function LibraryScreen() {
 
   const handleSearch = (text: string) => {
     setQuery(text);
-    load(text, tab);
+    load(text, tab, mtgMode);
   };
 
-  const empty =
-    tab === 'movies'
-      ? {
-          title: query || availability !== 'all' ? 'No matches' : 'No movies yet',
-          message:
-            availability === 'out'
-              ? 'Nothing is checked out right now.'
-              : availability === 'available'
-                ? 'No available movies match.'
-                : query
-                  ? 'Try a different search term.'
-                  : 'Scan a disc barcode or tap + to search TMDb.',
-        }
-      : {
-          title: query || availability !== 'all' ? 'No matches' : 'No books yet',
-          message:
-            availability === 'out'
-              ? 'Nothing is checked out right now.'
-              : availability === 'available'
-                ? 'No available books match.'
-                : query
-                  ? 'Try a different search term.'
-                  : 'Scan an ISBN barcode to add your first book.',
-        };
+  const adjustQty = (card: MtgCard, delta: number) => {
+    const next = card.qty + delta;
+    void (async () => {
+      try {
+        await updateMtgCardQty(card.id, next);
+        await load(query, 'mtg', 'collection');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not update quantity.';
+        Alert.alert('Error', message);
+      }
+    })();
+  };
 
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.tabs}>
-        {(['movies', 'books'] as const).map((value) => {
+        {([
+          ['movies', 'Movies'],
+          ['books', 'Books'],
+          ['mtg', 'MTG'],
+        ] as const).map(([value, label]) => {
           const active = tab === value;
           return (
             <Pressable
@@ -136,41 +144,6 @@ export default function LibraryScreen() {
               ]}
             >
               <Text style={{ color: active ? colors.accent : colors.textSecondary, fontWeight: '700' }}>
-                {value === 'movies' ? 'Movies' : 'Books'}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <View style={styles.tabs}>
-        {(
-          [
-            ['all', 'All'],
-            ['available', 'Available'],
-            ['out', 'Checked out'],
-          ] as const
-        ).map(([value, label]) => {
-          const active = availability === value;
-          return (
-            <Pressable
-              key={value}
-              onPress={() => setAvailability(value)}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: active ? colors.surfaceElevated : 'transparent',
-                  borderColor: active ? colors.textSecondary : colors.border,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: active ? colors.text : colors.textSecondary,
-                  fontWeight: '600',
-                  fontSize: 13,
-                }}
-              >
                 {label}
               </Text>
             </Pressable>
@@ -178,29 +151,106 @@ export default function LibraryScreen() {
         })}
       </View>
 
+      {tab !== 'mtg' ? (
+        <View style={styles.tabs}>
+          {(
+            [
+              ['all', 'All'],
+              ['available', 'Available'],
+              ['out', 'Checked out'],
+            ] as const
+          ).map(([value, label]) => {
+            const active = availability === value;
+            return (
+              <Pressable
+                key={value}
+                onPress={() => setAvailability(value)}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: active ? colors.surfaceElevated : 'transparent',
+                    borderColor: active ? colors.textSecondary : colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: active ? colors.text : colors.textSecondary,
+                    fontWeight: '600',
+                    fontSize: 13,
+                  }}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : (
+        <View style={styles.tabs}>
+          {([
+            ['collection', 'Collection'],
+            ['decks', 'Decks'],
+          ] as const).map(([value, label]) => {
+            const active = mtgMode === value;
+            return (
+              <Pressable
+                key={value}
+                onPress={() => setMtgMode(value)}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: active ? colors.surfaceElevated : 'transparent',
+                    borderColor: active ? colors.textSecondary : colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    color: active ? colors.text : colors.textSecondary,
+                    fontWeight: '600',
+                    fontSize: 13,
+                  }}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
       <View style={styles.searchRow}>
         <View style={styles.searchInput}>
           <SearchInput
             value={query}
             onChangeText={handleSearch}
-            placeholder={tab === 'movies' ? 'Search movies' : 'Search books'}
+            placeholder={
+              tab === 'movies'
+                ? 'Search movies'
+                : tab === 'books'
+                  ? 'Search books'
+                  : mtgMode === 'decks'
+                    ? 'Search decks'
+                    : 'Search collection'
+            }
           />
         </View>
-        <Pressable
-          onPress={() => router.push('/scan')}
-          style={({ pressed }) => [
-            styles.iconButton,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Scan barcode"
-        >
-          <Text style={{ color: colors.text, fontWeight: '700', fontSize: 12 }}>Scan</Text>
-        </Pressable>
+        {tab !== 'mtg' ? (
+          <Pressable
+            onPress={() => router.push('/scan')}
+            style={({ pressed }) => [
+              styles.iconButton,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <Text style={{ color: colors.text, fontWeight: '700', fontSize: 12 }}>Scan</Text>
+          </Pressable>
+        ) : null}
         {tab === 'movies' ? (
           <Pressable
             onPress={() => router.push('/add')}
@@ -208,10 +258,36 @@ export default function LibraryScreen() {
               styles.addButton,
               { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
             ]}
-            accessibilityRole="button"
-            accessibilityLabel="Add movie"
           >
             <Text style={[styles.addButtonText, { color: colors.accentText }]}>+</Text>
+          </Pressable>
+        ) : null}
+        {tab === 'mtg' && mtgMode === 'collection' ? (
+          <Pressable
+            onPress={() => router.push('/mtg/add')}
+            style={({ pressed }) => [
+              styles.addButton,
+              { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <Text style={[styles.addButtonText, { color: colors.accentText }]}>+</Text>
+          </Pressable>
+        ) : null}
+        {tab === 'mtg' && mtgMode === 'decks' ? (
+          <Pressable
+            onPress={() => router.push('/mtg/import')}
+            style={({ pressed }) => [
+              styles.iconButton,
+              {
+                backgroundColor: colors.accent,
+                borderColor: colors.accent,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <Text style={{ color: colors.accentText, fontWeight: '700', fontSize: 12 }}>
+              Import
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -222,7 +298,10 @@ export default function LibraryScreen() {
         </View>
       ) : tab === 'movies' ? (
         filteredMovies.length === 0 ? (
-          <EmptyState title={empty.title} message={empty.message} />
+          <EmptyState
+            title={query || availability !== 'all' ? 'No matches' : 'No movies yet'}
+            message="Scan a disc or tap + to search TMDb."
+          />
         ) : (
           <FlatList
             data={filteredMovies}
@@ -239,63 +318,125 @@ export default function LibraryScreen() {
             )}
           />
         )
-      ) : filteredBooks.length === 0 ? (
-        <EmptyState title={empty.title} message={empty.message} />
+      ) : tab === 'books' ? (
+        filteredBooks.length === 0 ? (
+          <EmptyState
+            title={query || availability !== 'all' ? 'No matches' : 'No books yet'}
+            message="Scan an ISBN to add a book."
+          />
+        ) : (
+          <FlatList
+            data={filteredBooks}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            contentContainerStyle={styles.grid}
+            columnWrapperStyle={styles.row}
+            renderItem={({ item }) => {
+              const loan = checkouts.get(item.id);
+              return (
+                <Pressable
+                  onPress={() => router.push(`/book/${item.id}`)}
+                  style={({ pressed }) => [styles.bookItem, pressed && { opacity: 0.85 }]}
+                >
+                  <View>
+                    {item.coverUrl ? (
+                      <Image
+                        source={{ uri: item.coverUrl }}
+                        style={styles.bookCover}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View style={[styles.bookCover, { backgroundColor: colors.surfaceElevated }]} />
+                    )}
+                    {loan ? (
+                      <View style={[styles.bookBadge, { backgroundColor: colors.accent }]}>
+                        <Text
+                          style={[styles.bookBadgeText, { color: colors.accentText }]}
+                          numberOfLines={1}
+                        >
+                          Out · {loan.borrowerName}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={[styles.bookTitle, { color: colors.text }]} numberOfLines={2}>
+                    {item.title}
+                  </Text>
+                </Pressable>
+              );
+            }}
+          />
+        )
+      ) : mtgMode === 'collection' ? (
+        mtgCards.length === 0 ? (
+          <EmptyState
+            title={query ? 'No matches' : 'No cards yet'}
+            message="Tap + to search Scryfall and add cards to your collection."
+          />
+        ) : (
+          <FlatList
+            data={mtgCards}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.list}
+            renderItem={({ item }) => (
+              <View
+                style={[styles.mtgRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
+                {item.imageUri ? (
+                  <Image source={{ uri: item.imageUri }} style={styles.mtgThumb} contentFit="cover" />
+                ) : (
+                  <View style={[styles.mtgThumb, { backgroundColor: colors.surfaceElevated }]} />
+                )}
+                <View style={styles.mtgMeta}>
+                  <Text style={[styles.bookTitle, { color: colors.text }]} numberOfLines={2}>
+                    {item.name}
+                    {item.foil ? ' ★' : ''}
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>
+                    {[item.setCode?.toUpperCase(), item.collectorNumber, item.typeLine]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                </View>
+                <View style={styles.qtyCol}>
+                  <Pressable onPress={() => adjustQty(item, 1)} hitSlop={8}>
+                    <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 18 }}>+</Text>
+                  </Pressable>
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>{item.qty}</Text>
+                  <Pressable onPress={() => adjustQty(item, -1)} hitSlop={8}>
+                    <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 18 }}>−</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          />
+        )
+      ) : mtgDecks.length === 0 ? (
+        <EmptyState
+          title={query ? 'No matches' : 'No decks yet'}
+          message="Tap Import to pull a commander deck from Archidekt."
+        />
       ) : (
         <FlatList
-          data={filteredBooks}
+          data={mtgDecks}
           keyExtractor={(item) => item.id}
-          numColumns={2}
-          contentContainerStyle={styles.grid}
-          columnWrapperStyle={styles.row}
-          renderItem={({ item }) => {
-            const loan = checkouts.get(item.id);
-            return (
-              <Pressable
-                onPress={() => router.push(`/book/${item.id}`)}
-                style={({ pressed }) => [styles.bookItem, pressed && { opacity: 0.85 }]}
-              >
-                <View>
-                  {item.coverUrl ? (
-                    <Image
-                      source={{ uri: item.coverUrl }}
-                      style={styles.bookCover}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={[styles.bookCover, { backgroundColor: colors.surfaceElevated }]}>
-                      <Text
-                        style={{
-                          color: colors.textTertiary,
-                          fontSize: 12,
-                          textAlign: 'center',
-                          padding: 8,
-                        }}
-                      >
-                        {item.title}
-                      </Text>
-                    </View>
-                  )}
-                  {loan ? (
-                    <View style={[styles.bookBadge, { backgroundColor: colors.accent }]}>
-                      <Text
-                        style={[styles.bookBadgeText, { color: colors.accentText }]}
-                        numberOfLines={1}
-                      >
-                        Out · {loan.borrowerName}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                <Text style={[styles.bookTitle, { color: colors.text }]} numberOfLines={2}>
-                  {item.title}
+          contentContainerStyle={styles.list}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => router.push(`/mtg/deck/${item.id}`)}
+              style={[styles.deckRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={[styles.bookTitle, { color: colors.text }]}>{item.name}</Text>
+                <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
+                  {item.archidektId
+                    ? `Archidekt ${item.archidektId}`
+                    : `Updated ${new Date(item.updatedAt).toLocaleDateString()}`}
                 </Text>
-                <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>
-                  {[item.year, item.authors[0]].filter(Boolean).join(' · ')}
-                </Text>
-              </Pressable>
-            );
-          }}
+              </View>
+              <Text style={{ color: colors.accent, fontWeight: '700' }}>Open</Text>
+            </Pressable>
+          )}
         />
       )}
     </View>
@@ -303,9 +444,7 @@ export default function LibraryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   tabs: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -332,9 +471,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
     gap: spacing.sm,
   },
-  searchInput: {
-    flex: 1,
-  },
+  searchInput: { flex: 1 },
   iconButton: {
     height: 44,
     paddingHorizontal: spacing.md,
@@ -364,8 +501,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingBottom: spacing.lg,
   },
-  row: {
-    justifyContent: 'space-between',
+  row: { justifyContent: 'space-between' },
+  list: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
   },
   bookItem: {
     flex: 1,
@@ -378,8 +517,6 @@ const styles = StyleSheet.create({
     aspectRatio: 2 / 3,
     borderRadius: radius.md,
     overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   bookBadge: {
     position: 'absolute',
@@ -399,5 +536,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 18,
+  },
+  mtgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: spacing.sm,
+  },
+  mtgThumb: {
+    width: 44,
+    height: 62,
+    borderRadius: 6,
+  },
+  mtgMeta: { flex: 1, gap: 4 },
+  qtyCol: {
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 28,
+  },
+  deckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: spacing.sm,
   },
 });
