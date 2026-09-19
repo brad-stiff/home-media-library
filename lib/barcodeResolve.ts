@@ -51,14 +51,14 @@ export async function resolveBarcode(raw: string): Promise<BarcodeResolveResult>
         kind: 'unresolved',
         barcode,
         reason: 'No book found for that ISBN.',
-        suggestedQuery: null,
+        suggestedQuery: barcode,
       };
     } catch {
       return {
         kind: 'unresolved',
         barcode,
         reason: 'Could not reach Open Library. Try again or search manually.',
-        suggestedQuery: null,
+        suggestedQuery: barcode,
       };
     }
   }

@@ -41,7 +41,7 @@ Or scan the QR code with Expo Go after running `npm start`.
 - Email/password accounts (Supabase Auth)
 - Households with admin / member roles + short invite code
 - Movies: TMDb search, ownership toggles, barcode UPC lookup
-- Books: ISBN barcode → Open Library
+- Books: ISBN barcode → Open Library; title search fallback
 - Checkout / lending with free-text borrower names
 - MTG: Scryfall collection search/add (qty + foil)
 - Commander decks + Archidekt import (resolves cards via Scryfall)

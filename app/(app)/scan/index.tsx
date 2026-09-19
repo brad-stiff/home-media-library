@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '../../../components/PrimaryButton';
-import { normalizeBarcode } from '../../../lib/barcode';
+import { isIsbn, normalizeBarcode } from '../../../lib/barcode';
 import { resolveBarcode } from '../../../lib/barcodeResolve';
 import { radius, spacing, useTheme } from '../../../lib/theme';
 
@@ -57,12 +57,13 @@ export default function ScanScreen() {
           return;
         }
 
+        const searchBooks = isIsbn(result.barcode);
         Alert.alert('No match', result.reason, [
           {
-            text: 'Search movies',
+            text: searchBooks ? 'Search books' : 'Search movies',
             onPress: () =>
               router.replace({
-                pathname: '/add',
+                pathname: searchBooks ? '/add-book' : '/add',
                 params: result.suggestedQuery ? { q: result.suggestedQuery } : undefined,
               }),
           },
@@ -179,7 +180,10 @@ export default function ScanScreen() {
               </Pressable>
             </View>
             <Pressable onPress={() => router.push('/add')} style={styles.secondary}>
-              <Text style={{ color: colors.accent, fontWeight: '600' }}>Search TMDb instead</Text>
+              <Text style={{ color: colors.accent, fontWeight: '600' }}>Search movies (TMDb)</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push('/add-book')} style={styles.secondary}>
+              <Text style={{ color: colors.accent, fontWeight: '600' }}>Search books (Open Library)</Text>
             </Pressable>
           </>
         )}

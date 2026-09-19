@@ -17,6 +17,7 @@ export default function AppLayout() {
     >
       <Stack.Screen name="index" options={{ title: 'My Library' }} />
       <Stack.Screen name="add" options={{ title: 'Add Movie', presentation: 'modal' }} />
+      <Stack.Screen name="add-book" options={{ title: 'Add Book', presentation: 'modal' }} />
       <Stack.Screen name="movie/[id]" options={{ title: '' }} />
       <Stack.Screen name="book/[id]" options={{ title: '' }} />
       <Stack.Screen name="household/index" options={{ title: 'Household' }} />

@@ -262,6 +262,17 @@ export default function LibraryScreen() {
             <Text style={[styles.addButtonText, { color: colors.accentText }]}>+</Text>
           </Pressable>
         ) : null}
+        {tab === 'books' ? (
+          <Pressable
+            onPress={() => router.push('/add-book')}
+            style={({ pressed }) => [
+              styles.addButton,
+              { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <Text style={[styles.addButtonText, { color: colors.accentText }]}>+</Text>
+          </Pressable>
+        ) : null}
         {tab === 'mtg' && mtgMode === 'collection' ? (
           <Pressable
             onPress={() => router.push('/mtg/add')}
@@ -322,7 +333,7 @@ export default function LibraryScreen() {
         filteredBooks.length === 0 ? (
           <EmptyState
             title={query || availability !== 'all' ? 'No matches' : 'No books yet'}
-            message="Scan an ISBN to add a book."
+            message="Scan an ISBN or tap + to search Open Library."
           />
         ) : (
           <FlatList
