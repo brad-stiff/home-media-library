@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -33,13 +33,20 @@ const DEFAULT_OWNERSHIP: MovieOwnership = {
 export default function AddMovieScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const [query, setQuery] = useState('');
+  const { q } = useLocalSearchParams<{ q?: string }>();
+  const [query, setQuery] = useState(typeof q === 'string' ? q : '');
   const [results, setResults] = useState<TmdbMovieSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<TmdbMovieSearchResult | null>(null);
   const [ownership, setOwnership] = useState<MovieOwnership>(DEFAULT_OWNERSHIP);
   const [saving, setSaving] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof q === 'string' && q.trim()) {
+      setQuery(q);
+    }
+  }, [q]);
 
   useEffect(() => {
     if (!query.trim()) {

@@ -83,6 +83,7 @@ export async function getMovieByTmdbId(tmdbId: number): Promise<Movie | null> {
 export async function addMovie(
   details: TmdbMovieDetails,
   ownership: MovieOwnership,
+  options?: { barcode?: string | null },
 ): Promise<Movie> {
   assertOwnership(ownership);
 
@@ -97,6 +98,7 @@ export async function addMovie(
   } = await supabase.auth.getUser();
 
   const platform = ownership.platform?.trim() || null;
+  const barcode = options?.barcode?.replace(/\D/g, '') || null;
 
   const { data, error } = await supabase
     .from('movies')
@@ -114,6 +116,7 @@ export async function addMovie(
       has_4k: ownership.has4k,
       has_digital: ownership.hasDigital,
       platform,
+      barcode,
       added_by: user?.id ?? null,
     })
     .select('*')

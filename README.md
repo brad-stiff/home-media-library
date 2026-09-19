@@ -1,6 +1,6 @@
 # Home Media Library
 
-A mobile app to keep track of your home's media collection. Starting with movies — more media types coming later.
+A mobile app to keep track of your home's media collection. Starting with movies and books — more media types coming later.
 
 ## Getting started
 
@@ -12,8 +12,8 @@ npm install
 
 2. Create a [Supabase](https://supabase.com) project, then run SQL:
 
-- **New project:** run [`supabase/schema.sql`](./supabase/schema.sql) (Phases 1–2)
-- **Already ran Phase 1:** also run [`supabase/phase2.sql`](./supabase/phase2.sql)
+- **New project:** run [`supabase/schema.sql`](./supabase/schema.sql) (Phases 1–3)
+- **Already on Phase 2:** run [`supabase/phase3.sql`](./supabase/phase3.sql)
 
 3. For local testing, disable email confirmation:
 
@@ -36,20 +36,20 @@ npm run ios
 
 Or scan the QR code with Expo Go after running `npm start`.
 
-## Features (Phases 1–2)
+## Features (Phases 1–3)
 
 - Email/password accounts (Supabase Auth)
-- Households with admin / member roles
-- Short invite code — share so a spouse can join as a member
-- Search TMDb and add movies to your shared cloud library
-- Ownership: Blu-ray / 4K / Digital toggles + optional platform (Amazon, etc.)
-- Grid view, detail screen, in-library search
-- Admin-only movie delete (RLS)
+- Households with admin / member roles + short invite code
+- Movies: TMDb search, ownership toggles (Blu-ray / 4K / Digital + platform)
+- Books: ISBN barcode → Open Library
+- Barcode scan for discs (UPC → product title → TMDb) and books (ISBN)
+- Manual search fallback when a barcode lookup fails
+- Admin-only delete (RLS)
 - Light and dark mode
 
 ## Tech stack
 
 - Expo (React Native) + TypeScript — SDK 57
-- Expo Router for navigation
+- Expo Router + expo-camera (barcode)
 - Supabase (Auth + Postgres + RLS)
-- TMDb API for movie metadata
+- TMDb, Open Library, UPCitemdb (trial) for lookups

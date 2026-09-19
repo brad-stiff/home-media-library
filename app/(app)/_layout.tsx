@@ -15,11 +15,15 @@ export default function AppLayout() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'My Movies' }} />
+      <Stack.Screen name="index" options={{ title: 'My Library' }} />
       <Stack.Screen name="add" options={{ title: 'Add Movie', presentation: 'modal' }} />
       <Stack.Screen name="movie/[id]" options={{ title: '' }} />
+      <Stack.Screen name="book/[id]" options={{ title: '' }} />
       <Stack.Screen name="household/index" options={{ title: 'Household' }} />
       <Stack.Screen name="household/join" options={{ title: 'Join Household' }} />
+      <Stack.Screen name="scan/index" options={{ title: 'Scan', presentation: 'fullScreenModal' }} />
+      <Stack.Screen name="scan/confirm-book" options={{ title: 'Add Book' }} />
+      <Stack.Screen name="scan/confirm-movie" options={{ title: 'Add Movie' }} />
     </Stack>
   );
 }
