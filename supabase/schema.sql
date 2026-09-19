@@ -1,4 +1,4 @@
--- Home Media Library — Phase 1 schema
+-- Home Media Library — full schema
 -- Run this in the Supabase SQL Editor (Dashboard → SQL → New query).
 
 -- ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ create table public.household_members (
   role text not null check (role in ('admin', 'member')),
   joined_at timestamptz not null default now(),
   primary key (household_id, user_id),
-  -- One household per user (Phase 1 product rule)
+  -- One household per user
   unique (user_id)
 );
 
@@ -242,7 +242,7 @@ create policy "Admins can delete household movies"
   using (public.is_household_admin(household_id));
 
 -- ---------------------------------------------------------------------------
--- Phase 2 RPCs: rename, rotate invite code, join by code
+-- Household RPCs: rename, rotate invite code, join by code
 -- ---------------------------------------------------------------------------
 
 create or replace function public.update_household_name(new_name text)
@@ -377,7 +377,7 @@ grant execute on function public.update_household_name(text) to authenticated;
 grant execute on function public.regenerate_invite_code() to authenticated;
 grant execute on function public.join_household(text, boolean) to authenticated;
 -- ---------------------------------------------------------------------------
--- Phase 3: barcode column + books
+-- Movie barcode + books
 -- ---------------------------------------------------------------------------
 
 alter table public.movies
@@ -438,7 +438,7 @@ create policy "Admins can delete household books"
   using (public.is_household_admin(household_id));
 
 -- ---------------------------------------------------------------------------
--- Phase 4: checkouts / lending
+-- Checkouts / lending
 -- ---------------------------------------------------------------------------
 
 create table if not exists public.checkouts (
@@ -583,8 +583,7 @@ $$;
 
 grant execute on function public.checkout_item(text, uuid, text, text) to authenticated;
 grant execute on function public.return_item(uuid) to authenticated;
--- Home Media Library — Phase 5 (MTG collection + commander decks)
--- Run after phase4.sql
+-- MTG collection + commander decks
 
 create table if not exists public.mtg_cards (
   id uuid primary key default gen_random_uuid(),

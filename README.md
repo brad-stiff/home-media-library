@@ -10,10 +10,7 @@ A mobile app to keep track of your home's media collection — movies, books, an
 npm install
 ```
 
-2. Create a [Supabase](https://supabase.com) project, then run SQL:
-
-- **New project:** run [`supabase/schema.sql`](./supabase/schema.sql) (Phases 1–5)
-- **Already on Phase 4:** run [`supabase/phase5.sql`](./supabase/phase5.sql)
+2. Create a [Supabase](https://supabase.com) project, then run [`supabase/schema.sql`](./supabase/schema.sql) in the SQL Editor.
 
 3. For local testing, disable email confirmation:
 
@@ -36,7 +33,7 @@ npm run ios
 
 Or scan the QR code with Expo Go after running `npm start`.
 
-## Features (Phases 1–5)
+## Features
 
 - Email/password accounts (Supabase Auth)
 - Households with admin / member roles + short invite code
@@ -47,10 +44,6 @@ Or scan the QR code with Expo Go after running `npm start`.
 - Commander decks + Archidekt import (resolves cards via Scryfall)
 - Admin-only delete for catalog items (RLS)
 - Light and dark mode
-
-## Database setup
-
-Incremental migrations live in `supabase/phase2.sql` … `phase5.sql` if you applied earlier phases already.
 
 ## Tech stack
 
