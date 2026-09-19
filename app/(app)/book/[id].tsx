@@ -11,7 +11,9 @@ import {
 } from 'react-native';
 
 import { PrimaryButton } from '../../../components/PrimaryButton';
+import { CheckoutPanel } from '../../../components/CheckoutPanel';
 import { Book, deleteBook, getBookById } from '../../../lib/books';
+import { Checkout, getActiveCheckout } from '../../../lib/checkouts';
 import { getMyHousehold } from '../../../lib/household';
 import { spacing, useTheme } from '../../../lib/theme';
 
@@ -23,6 +25,7 @@ export default function BookDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [activeCheckout, setActiveCheckout] = useState<Checkout | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -31,10 +34,15 @@ export default function BookDetailScreen() {
         if (!id) return;
         setLoading(true);
         try {
-          const [result, household] = await Promise.all([getBookById(id), getMyHousehold()]);
+          const [result, household, checkout] = await Promise.all([
+            getBookById(id),
+            getMyHousehold(),
+            getActiveCheckout('book', id),
+          ]);
           if (active) {
             setBook(result);
             setIsAdmin(household.role === 'admin');
+            setActiveCheckout(checkout);
           }
         } catch (error) {
           if (active) {
@@ -114,6 +122,12 @@ export default function BookDetailScreen() {
         <Text style={[styles.meta, { color: colors.textTertiary }]}>
           Added {new Date(book.addedAt).toLocaleDateString()}
         </Text>
+        <CheckoutPanel
+          itemType="book"
+          itemId={book.id}
+          activeCheckout={activeCheckout}
+          onChanged={setActiveCheckout}
+        />
         {isAdmin ? (
           <PrimaryButton
             label="Remove from Library"

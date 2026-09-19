@@ -1,15 +1,16 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MoviePoster } from './MoviePoster';
-import { spacing, useTheme } from '../lib/theme';
+import { radius, spacing, useTheme } from '../lib/theme';
 import { formatOwnershipLabel, Movie } from '../lib/types';
 
 interface MovieGridItemProps {
   movie: Movie;
   onPress: () => void;
+  checkoutLabel?: string | null;
 }
 
-export function MovieGridItem({ movie, onPress }: MovieGridItemProps) {
+export function MovieGridItem({ movie, onPress, checkoutLabel }: MovieGridItemProps) {
   const { colors } = useTheme();
   const ownership = formatOwnershipLabel(movie);
 
@@ -18,9 +19,20 @@ export function MovieGridItem({ movie, onPress }: MovieGridItemProps) {
       onPress={onPress}
       style={({ pressed }) => [styles.container, pressed && styles.pressed]}
       accessibilityRole="button"
-      accessibilityLabel={`${movie.title}, ${movie.year ?? 'unknown year'}, ${ownership}`}
+      accessibilityLabel={`${movie.title}, ${movie.year ?? 'unknown year'}, ${ownership}${
+        checkoutLabel ? `, checked out to ${checkoutLabel}` : ''
+      }`}
     >
-      <MoviePoster posterPath={movie.posterPath} title={movie.title} />
+      <View>
+        <MoviePoster posterPath={movie.posterPath} title={movie.title} />
+        {checkoutLabel ? (
+          <View style={[styles.badge, { backgroundColor: colors.accent }]}>
+            <Text style={[styles.badgeText, { color: colors.accentText }]} numberOfLines={1}>
+              Out · {checkoutLabel}
+            </Text>
+          </View>
+        ) : null}
+      </View>
       <View style={styles.meta}>
         <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
           {movie.title}
@@ -41,6 +53,20 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.85,
+  },
+  badge: {
+    position: 'absolute',
+    left: spacing.xs,
+    right: spacing.xs,
+    bottom: spacing.xs,
+    borderRadius: radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   meta: {
     marginTop: spacing.sm,

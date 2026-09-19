@@ -12,8 +12,8 @@ npm install
 
 2. Create a [Supabase](https://supabase.com) project, then run SQL:
 
-- **New project:** run [`supabase/schema.sql`](./supabase/schema.sql) (Phases 1–3)
-- **Already on Phase 2:** run [`supabase/phase3.sql`](./supabase/phase3.sql)
+- **New project:** run [`supabase/schema.sql`](./supabase/schema.sql) (Phases 1–4)
+- **Already on Phase 3:** run [`supabase/phase4.sql`](./supabase/phase4.sql)
 
 3. For local testing, disable email confirmation:
 
@@ -36,16 +36,23 @@ npm run ios
 
 Or scan the QR code with Expo Go after running `npm start`.
 
-## Features (Phases 1–3)
+## Features (Phases 1–4)
 
 - Email/password accounts (Supabase Auth)
 - Households with admin / member roles + short invite code
 - Movies: TMDb search, ownership toggles (Blu-ray / 4K / Digital + platform)
 - Books: ISBN barcode → Open Library
-- Barcode scan for discs (UPC → product title → TMDb) and books (ISBN)
-- Manual search fallback when a barcode lookup fails
+- Barcode scan for discs (UPC → TMDb) and books (ISBN)
+- Checkout / lending with free-text borrower names
+- Library filters: All / Available / Checked out
 - Admin-only delete (RLS)
 - Light and dark mode
+
+## Database setup
+
+1. **New project:** run [`supabase/schema.sql`](./supabase/schema.sql)
+2. **Incremental:** run `phase2.sql` → `phase3.sql` → [`phase4.sql`](./supabase/phase4.sql) as needed
+3. Disable email confirmation under **Authentication → Providers → Email** for local testing
 
 ## Tech stack
 

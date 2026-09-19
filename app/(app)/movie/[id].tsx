@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 
 import { PrimaryButton } from '../../../components/PrimaryButton';
+import { CheckoutPanel } from '../../../components/CheckoutPanel';
+import { Checkout, getActiveCheckout } from '../../../lib/checkouts';
 import { getMyHousehold } from '../../../lib/household';
 import { deleteMovie, getMovieById } from '../../../lib/movies';
 import { backdropUrl, formatRuntime, radius, spacing, useTheme } from '../../../lib/theme';
@@ -24,6 +26,7 @@ export default function MovieDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [activeCheckout, setActiveCheckout] = useState<Checkout | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -33,10 +36,15 @@ export default function MovieDetailScreen() {
         if (!id) return;
         setLoading(true);
         try {
-          const [result, household] = await Promise.all([getMovieById(id), getMyHousehold()]);
+          const [result, household, checkout] = await Promise.all([
+            getMovieById(id),
+            getMyHousehold(),
+            getActiveCheckout('movie', id),
+          ]);
           if (active) {
             setMovie(result);
             setIsAdmin(household.role === 'admin');
+            setActiveCheckout(checkout);
           }
         } catch (error) {
           if (active) {
@@ -162,6 +170,16 @@ export default function MovieDetailScreen() {
               <Text style={[styles.overview, { color: colors.textSecondary }]}>{movie.overview}</Text>
             </View>
           ) : null}
+
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Lending</Text>
+            <CheckoutPanel
+              itemType="movie"
+              itemId={movie.id}
+              activeCheckout={activeCheckout}
+              onChanged={setActiveCheckout}
+            />
+          </View>
 
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>In your library</Text>
