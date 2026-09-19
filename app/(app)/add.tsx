@@ -8,19 +8,27 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
-import { FormatPicker } from '../components/FormatPicker';
-import { MoviePoster } from '../components/MoviePoster';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { SearchInput } from '../components/SearchInput';
-import { addMovie } from '../lib/db';
-import { spacing, useTheme } from '../lib/theme';
-import { getMovieDetails, movieSearchSubtitle, searchMovies } from '../lib/tmdb';
-import { MovieFormat, TmdbMovieSearchResult } from '../lib/types';
+import { MoviePoster } from '../../components/MoviePoster';
+import { OwnershipPicker } from '../../components/OwnershipPicker';
+import { PrimaryButton } from '../../components/PrimaryButton';
+import { SearchInput } from '../../components/SearchInput';
+import { addMovie } from '../../lib/movies';
+import { spacing, useTheme } from '../../lib/theme';
+import { getMovieDetails, movieSearchSubtitle, searchMovies } from '../../lib/tmdb';
+import { MovieOwnership, TmdbMovieSearchResult } from '../../lib/types';
+
+const DEFAULT_OWNERSHIP: MovieOwnership = {
+  hasBluray: true,
+  has4k: false,
+  hasDigital: false,
+  platform: null,
+};
 
 export default function AddMovieScreen() {
   const router = useRouter();
@@ -29,7 +37,7 @@ export default function AddMovieScreen() {
   const [results, setResults] = useState<TmdbMovieSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<TmdbMovieSearchResult | null>(null);
-  const [format, setFormat] = useState<MovieFormat>('Blu-ray');
+  const [ownership, setOwnership] = useState<MovieOwnership>(DEFAULT_OWNERSHIP);
   const [saving, setSaving] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -63,7 +71,7 @@ export default function AddMovieScreen() {
     setSaving(true);
     try {
       const details = await getMovieDetails(selected.id);
-      await addMovie(details, format);
+      await addMovie(details, ownership);
       router.back();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not add movie.';
@@ -79,7 +87,7 @@ export default function AddMovieScreen() {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.confirmContent}>
+        <ScrollView contentContainerStyle={styles.confirmContent} keyboardShouldPersistTaps="handled">
           <View style={styles.confirmHeader}>
             <MoviePoster posterPath={selected.poster_path} title={selected.title} size="lg" />
             <View style={styles.confirmMeta}>
@@ -95,17 +103,23 @@ export default function AddMovieScreen() {
             </View>
           </View>
 
-          <FormatPicker value={format} onChange={setFormat} />
+          <OwnershipPicker value={ownership} onChange={setOwnership} />
 
           <View style={styles.confirmActions}>
             <PrimaryButton label="Add to Library" onPress={handleSave} loading={saving} />
-            <Pressable onPress={() => setSelected(null)} style={styles.secondaryAction}>
+            <Pressable
+              onPress={() => {
+                setSelected(null);
+                setOwnership(DEFAULT_OWNERSHIP);
+              }}
+              style={styles.secondaryAction}
+            >
               <Text style={[styles.secondaryActionText, { color: colors.textSecondary }]}>
                 Choose a different movie
               </Text>
             </Pressable>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     );
   }
@@ -151,7 +165,10 @@ export default function AddMovieScreen() {
               onPress={() => setSelected(item)}
               style={({ pressed }) => [
                 styles.resultRow,
-                { backgroundColor: pressed ? colors.surfaceElevated : colors.surface, borderColor: colors.border },
+                {
+                  backgroundColor: pressed ? colors.surfaceElevated : colors.surface,
+                  borderColor: colors.border,
+                },
               ]}
             >
               {item.poster_path ? (
@@ -161,7 +178,13 @@ export default function AddMovieScreen() {
                   contentFit="cover"
                 />
               ) : (
-                <View style={[styles.resultPoster, styles.resultPosterPlaceholder, { backgroundColor: colors.surfaceElevated }]}>
+                <View
+                  style={[
+                    styles.resultPoster,
+                    styles.resultPosterPlaceholder,
+                    { backgroundColor: colors.surfaceElevated },
+                  ]}
+                >
                   <Text style={{ color: colors.textTertiary, fontSize: 10 }}>No art</Text>
                 </View>
               )}
@@ -246,7 +269,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   confirmContent: {
-    flex: 1,
+    flexGrow: 1,
     padding: spacing.lg,
     gap: spacing.lg,
   },
@@ -273,7 +296,7 @@ const styles = StyleSheet.create({
   },
   confirmActions: {
     gap: spacing.md,
-    marginTop: 'auto',
+    marginTop: spacing.md,
   },
   secondaryAction: {
     alignItems: 'center',

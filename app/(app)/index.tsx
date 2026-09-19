@@ -1,7 +1,8 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { useCallback, useLayoutEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -10,15 +11,16 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { EmptyState } from '../components/EmptyState';
-import { MovieGridItem } from '../components/MovieGridItem';
-import { SearchInput } from '../components/SearchInput';
-import { searchMoviesInLibrary } from '../lib/db';
-import { spacing, useTheme } from '../lib/theme';
-import { Movie } from '../lib/types';
+import { EmptyState } from '../../components/EmptyState';
+import { MovieGridItem } from '../../components/MovieGridItem';
+import { SearchInput } from '../../components/SearchInput';
+import { searchMoviesInLibrary } from '../../lib/movies';
+import { spacing, useTheme } from '../../lib/theme';
+import { Movie } from '../../lib/types';
 
 export default function LibraryScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -30,6 +32,9 @@ export default function LibraryScreen() {
     try {
       const results = await searchMoviesInLibrary(searchQuery);
       setMovies(results);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not load movies.';
+      Alert.alert('Error', message);
     } finally {
       setLoading(false);
     }
@@ -40,6 +45,16 @@ export default function LibraryScreen() {
       loadMovies(query);
     }, [loadMovies, query]),
   );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <Pressable onPress={() => router.push('/household')} hitSlop={8}>
+          <Text style={{ color: colors.accent, fontWeight: '600' }}>Household</Text>
+        </Pressable>
+      ),
+    });
+  }, [navigation, router, colors.accent]);
 
   const handleSearch = (text: string) => {
     setQuery(text);

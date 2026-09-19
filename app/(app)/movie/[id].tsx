@@ -10,10 +10,11 @@ import {
   View,
 } from 'react-native';
 
-import { PrimaryButton } from '../../components/PrimaryButton';
-import { deleteMovie, getMovieById } from '../../lib/db';
-import { backdropUrl, formatRuntime, radius, spacing, useTheme } from '../../lib/theme';
-import { Movie } from '../../lib/types';
+import { PrimaryButton } from '../../../components/PrimaryButton';
+import { getMyHousehold } from '../../../lib/household';
+import { deleteMovie, getMovieById } from '../../../lib/movies';
+import { backdropUrl, formatRuntime, radius, spacing, useTheme } from '../../../lib/theme';
+import { formatOwnershipLabel, Movie } from '../../../lib/types';
 
 export default function MovieDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,6 +23,7 @@ export default function MovieDetailScreen() {
   const [movie, setMovie] = useState<Movie | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -30,10 +32,20 @@ export default function MovieDetailScreen() {
       (async () => {
         if (!id) return;
         setLoading(true);
-        const result = await getMovieById(id);
-        if (active) {
-          setMovie(result);
-          setLoading(false);
+        try {
+          const [result, household] = await Promise.all([getMovieById(id), getMyHousehold()]);
+          if (active) {
+            setMovie(result);
+            setIsAdmin(household.role === 'admin');
+          }
+        } catch (error) {
+          if (active) {
+            const message = error instanceof Error ? error.message : 'Could not load movie.';
+            Alert.alert('Error', message);
+            setMovie(null);
+          }
+        } finally {
+          if (active) setLoading(false);
         }
       })();
 
@@ -56,8 +68,10 @@ export default function MovieDetailScreen() {
           try {
             await deleteMovie(movie.id);
             router.back();
-          } catch {
-            Alert.alert('Error', 'Could not remove this movie.');
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : 'Could not remove this movie.';
+            Alert.alert('Error', message);
             setDeleting(false);
           }
         },
@@ -82,6 +96,7 @@ export default function MovieDetailScreen() {
   }
 
   const backdrop = backdropUrl(movie.backdropPath);
+  const ownershipLabel = formatOwnershipLabel(movie);
 
   return (
     <>
@@ -101,9 +116,31 @@ export default function MovieDetailScreen() {
                 {[movie.year, formatRuntime(movie.runtime)].filter(Boolean).join(' · ')}
               </Text>
             </View>
-            <View style={[styles.formatBadge, { backgroundColor: colors.accentMuted }]}>
-              <Text style={[styles.formatText, { color: colors.accent }]}>{movie.format}</Text>
-            </View>
+          </View>
+
+          <View style={styles.ownershipRow}>
+            {movie.hasBluray ? (
+              <View style={[styles.formatBadge, { backgroundColor: colors.accentMuted }]}>
+                <Text style={[styles.formatText, { color: colors.accent }]}>Blu-ray</Text>
+              </View>
+            ) : null}
+            {movie.has4k ? (
+              <View style={[styles.formatBadge, { backgroundColor: colors.accentMuted }]}>
+                <Text style={[styles.formatText, { color: colors.accent }]}>4K</Text>
+              </View>
+            ) : null}
+            {movie.hasDigital ? (
+              <View style={[styles.formatBadge, { backgroundColor: colors.accentMuted }]}>
+                <Text style={[styles.formatText, { color: colors.accent }]}>Digital</Text>
+              </View>
+            ) : null}
+            {movie.platform?.trim() ? (
+              <View style={[styles.formatBadge, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]}>
+                <Text style={[styles.formatText, { color: colors.textSecondary }]}>
+                  {movie.platform.trim()}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {movie.genres.length > 0 ? (
@@ -129,16 +166,25 @@ export default function MovieDetailScreen() {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>In your library</Text>
             <Text style={[styles.addedText, { color: colors.textSecondary }]}>
+              {ownershipLabel}
+            </Text>
+            <Text style={[styles.addedText, { color: colors.textSecondary }]}>
               Added {new Date(movie.addedAt).toLocaleDateString()}
             </Text>
           </View>
 
-          <PrimaryButton
-            label="Remove from Library"
-            onPress={handleDelete}
-            loading={deleting}
-            variant="danger"
-          />
+          {isAdmin ? (
+            <PrimaryButton
+              label="Remove from Library"
+              onPress={handleDelete}
+              loading={deleting}
+              variant="danger"
+            />
+          ) : (
+            <Text style={[styles.addedText, { color: colors.textTertiary }]}>
+              Only household admins can remove movies.
+            </Text>
+          )}
         </View>
       </ScrollView>
     </>
@@ -179,6 +225,11 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     fontWeight: '500',
+  },
+  ownershipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
   },
   formatBadge: {
     borderRadius: radius.xl,

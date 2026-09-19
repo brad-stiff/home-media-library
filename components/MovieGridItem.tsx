@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MoviePoster } from './MoviePoster';
-import { radius, spacing, useTheme } from '../lib/theme';
-import { Movie } from '../lib/types';
+import { spacing, useTheme } from '../lib/theme';
+import { formatOwnershipLabel, Movie } from '../lib/types';
 
 interface MovieGridItemProps {
   movie: Movie;
@@ -11,13 +11,14 @@ interface MovieGridItemProps {
 
 export function MovieGridItem({ movie, onPress }: MovieGridItemProps) {
   const { colors } = useTheme();
+  const ownership = formatOwnershipLabel(movie);
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.container, pressed && styles.pressed]}
       accessibilityRole="button"
-      accessibilityLabel={`${movie.title}, ${movie.year ?? 'unknown year'}, ${movie.format}`}
+      accessibilityLabel={`${movie.title}, ${movie.year ?? 'unknown year'}, ${ownership}`}
     >
       <MoviePoster posterPath={movie.posterPath} title={movie.title} />
       <View style={styles.meta}>
@@ -25,7 +26,7 @@ export function MovieGridItem({ movie, onPress }: MovieGridItemProps) {
           {movie.title}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-          {[movie.year, movie.format].filter(Boolean).join(' · ')}
+          {[movie.year, ownership].filter(Boolean).join(' · ')}
         </Text>
       </View>
     </Pressable>

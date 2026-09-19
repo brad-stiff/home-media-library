@@ -10,15 +10,25 @@ A mobile app to keep track of your home's media collection. Starting with movies
 npm install
 ```
 
-2. Copy the environment file and add your TMDb API key:
+2. Create a [Supabase](https://supabase.com) project, then run SQL:
+
+- **New project:** run [`supabase/schema.sql`](./supabase/schema.sql) (Phases 1–2)
+- **Already ran Phase 1:** also run [`supabase/phase2.sql`](./supabase/phase2.sql)
+
+3. For local testing, disable email confirmation:
+
+- **Authentication → Providers → Email** → turn off **Confirm email**
+
+4. Copy the environment file and add your keys:
 
 ```bash
 cp .env.example .env
 ```
 
-Get a free API key at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api).
+- `EXPO_PUBLIC_TMDB_API_KEY` — free key from [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)
+- `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` — from Supabase **Project Settings → API**
 
-3. Start the app:
+5. Start the app:
 
 ```bash
 npm run ios
@@ -26,19 +36,20 @@ npm run ios
 
 Or scan the QR code with Expo Go after running `npm start`.
 
-## v1 features
+## Features (Phases 1–2)
 
-- Search TMDb and add movies to your library
-- Grid view with poster art
-- Movie detail screen (overview, genres, runtime, format)
-- Search and filter within your library
-- Format tags (Blu-ray, 4K UHD, DVD, Digital, Other)
-- Local SQLite storage (designed for future cloud sync)
+- Email/password accounts (Supabase Auth)
+- Households with admin / member roles
+- Short invite code — share so a spouse can join as a member
+- Search TMDb and add movies to your shared cloud library
+- Ownership: Blu-ray / 4K / Digital toggles + optional platform (Amazon, etc.)
+- Grid view, detail screen, in-library search
+- Admin-only movie delete (RLS)
 - Light and dark mode
 
 ## Tech stack
 
-- Expo (React Native) + TypeScript — SDK 54 (compatible with App Store Expo Go)
+- Expo (React Native) + TypeScript — SDK 57
 - Expo Router for navigation
-- Expo SQLite for local storage
+- Supabase (Auth + Postgres + RLS)
 - TMDb API for movie metadata

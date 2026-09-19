@@ -1,16 +1,26 @@
 import { Stack } from 'expo-router';
+import { ActivityIndicator, useColorScheme, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { AuthProvider, useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
 
-export default function RootLayout() {
+function RootNavigator() {
+  const { session, isReady } = useAuth();
   const { colors } = useTheme();
   const scheme = useColorScheme();
 
+  if (!isReady) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
+
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
+    <>
       <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
       <Stack
         screenOptions={{
@@ -21,10 +31,25 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: colors.background },
         }}
       >
-        <Stack.Screen name="index" options={{ title: 'My Movies' }} />
-        <Stack.Screen name="add" options={{ title: 'Add Movie', presentation: 'modal' }} />
-        <Stack.Screen name="movie/[id]" options={{ title: '' }} />
+        <Stack.Protected guard={!!session}>
+          <Stack.Screen name="(app)" options={{ headerShown: false }} />
+        </Stack.Protected>
+        <Stack.Protected guard={!session}>
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        </Stack.Protected>
       </Stack>
+    </>
+  );
+}
+
+export default function RootLayout() {
+  const { colors } = useTheme();
+
+  return (
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }

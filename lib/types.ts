@@ -1,7 +1,3 @@
-export const MOVIE_FORMATS = ['Blu-ray', '4K UHD', 'DVD', 'Digital', 'Other'] as const;
-
-export type MovieFormat = (typeof MOVIE_FORMATS)[number];
-
 export interface TmdbMovieSearchResult {
   id: number;
   title: string;
@@ -21,8 +17,18 @@ export interface TmdbMovieDetails {
   genres: { id: number; name: string }[];
 }
 
-export interface Movie {
+export type HouseholdRole = 'admin' | 'member';
+
+export interface MovieOwnership {
+  hasBluray: boolean;
+  has4k: boolean;
+  hasDigital: boolean;
+  platform: string | null;
+}
+
+export interface Movie extends MovieOwnership {
   id: string;
+  householdId: string;
   tmdbId: number;
   title: string;
   year: string | null;
@@ -31,13 +37,14 @@ export interface Movie {
   overview: string | null;
   runtime: number | null;
   genres: string[];
-  format: MovieFormat;
+  addedBy: string | null;
   addedAt: string;
   updatedAt: string;
 }
 
 export type MovieRow = {
   id: string;
+  household_id: string;
   tmdb_id: number;
   title: string;
   year: string | null;
@@ -45,8 +52,21 @@ export type MovieRow = {
   backdrop_path: string | null;
   overview: string | null;
   runtime: number | null;
-  genres: string;
-  format: string;
-  added_at: string;
+  genres: string[] | null;
+  has_bluray: boolean;
+  has_4k: boolean;
+  has_digital: boolean;
+  platform: string | null;
+  added_by: string | null;
+  created_at: string;
   updated_at: string;
 };
+
+export function formatOwnershipLabel(movie: MovieOwnership): string {
+  const parts: string[] = [];
+  if (movie.hasBluray) parts.push('Blu-ray');
+  if (movie.has4k) parts.push('4K');
+  if (movie.hasDigital) parts.push('Digital');
+  if (movie.platform?.trim()) parts.push(movie.platform.trim());
+  return parts.join(' · ') || 'Owned';
+}
