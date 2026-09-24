@@ -253,6 +253,7 @@ export default function HouseholdScreen() {
       </View>
 
       <View style={styles.section}>
+        <PrimaryButton label="Loan history" onPress={() => router.push('/loans')} />
         <PrimaryButton
           label="Join a different household"
           onPress={() => router.push('/household/join')}

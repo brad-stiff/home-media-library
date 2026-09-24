@@ -95,6 +95,11 @@ export default function LibraryScreen() {
           <Text style={{ color: colors.accent, fontWeight: '600' }}>Household</Text>
         </Pressable>
       ),
+      headerRight: () => (
+        <Pressable onPress={() => router.push('/loans')} hitSlop={8}>
+          <Text style={{ color: colors.accent, fontWeight: '600' }}>Loans</Text>
+        </Pressable>
+      ),
     });
   }, [navigation, router, colors.accent]);
 

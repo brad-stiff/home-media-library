@@ -13,7 +13,8 @@ import {
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { CheckoutPanel } from '../../../components/CheckoutPanel';
 import { useAuth } from '../../../lib/auth';
-import { Checkout, getActiveCheckout } from '../../../lib/checkouts';
+import { LoanHistory } from '../../../components/LoanHistory';
+import { Checkout, getActiveCheckout, listItemCheckouts } from '../../../lib/checkouts';
 import { listHouseholdMembers } from '../../../lib/household';
 import { useHousehold } from '../../../lib/householdContext';
 import { deleteMovie, getMovieById } from '../../../lib/movies';
@@ -35,6 +36,7 @@ export default function MovieDetailScreen() {
   const [canLend, setCanLend] = useState(false);
   const [addedByLabel, setAddedByLabel] = useState<string | null>(null);
   const [activeCheckout, setActiveCheckout] = useState<Checkout | null>(null);
+  const [loanHistory, setLoanHistory] = useState<Checkout[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -44,10 +46,11 @@ export default function MovieDetailScreen() {
         if (!id || !household) return;
         setLoading(true);
         try {
-          const [result, members, checkout] = await Promise.all([
+          const [result, members, checkout, history] = await Promise.all([
             getMovieById(id),
             listHouseholdMembers(),
             getActiveCheckout('movie', id),
+            listItemCheckouts('movie', id),
           ]);
           if (active) {
             setMovie(result);
@@ -61,6 +64,7 @@ export default function MovieDetailScreen() {
             setCanLend(isWriter(household.role));
             setAddedByLabel(result ? attributionName(result.addedBy, members) : null);
             setActiveCheckout(checkout);
+            setLoanHistory(history);
           }
         } catch (error) {
           if (active) {
@@ -193,9 +197,14 @@ export default function MovieDetailScreen() {
               itemType="movie"
               itemId={movie.id}
               activeCheckout={activeCheckout}
-              onChanged={setActiveCheckout}
+              onChanged={(next) => {
+                setActiveCheckout(next);
+                void listItemCheckouts('movie', movie.id).then(setLoanHistory);
+              }}
               canWrite={canLend}
+              allowCheckout={movie.hasBluray || movie.has4k}
             />
+            <LoanHistory loans={loanHistory} />
           </View>
 
           <View style={styles.section}>

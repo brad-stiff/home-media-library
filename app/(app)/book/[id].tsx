@@ -14,7 +14,8 @@ import { PrimaryButton } from '../../../components/PrimaryButton';
 import { CheckoutPanel } from '../../../components/CheckoutPanel';
 import { useAuth } from '../../../lib/auth';
 import { Book, deleteBook, getBookById, refreshBookFromOpenLibrary } from '../../../lib/books';
-import { Checkout, getActiveCheckout } from '../../../lib/checkouts';
+import { LoanHistory } from '../../../components/LoanHistory';
+import { Checkout, getActiveCheckout, listItemCheckouts } from '../../../lib/checkouts';
 import { listHouseholdMembers } from '../../../lib/household';
 import { useHousehold } from '../../../lib/householdContext';
 import { attributionName, canDeleteOwned, canEditHouseholdFacts, isWriter } from '../../../lib/roles';
@@ -35,6 +36,7 @@ export default function BookDetailScreen() {
   const [canLend, setCanLend] = useState(false);
   const [addedByLabel, setAddedByLabel] = useState<string | null>(null);
   const [activeCheckout, setActiveCheckout] = useState<Checkout | null>(null);
+  const [loanHistory, setLoanHistory] = useState<Checkout[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -43,10 +45,11 @@ export default function BookDetailScreen() {
         if (!id || !household) return;
         setLoading(true);
         try {
-          const [result, members, checkout] = await Promise.all([
+          const [result, members, checkout, history] = await Promise.all([
             getBookById(id),
             listHouseholdMembers(),
             getActiveCheckout('book', id),
+            listItemCheckouts('book', id),
           ]);
           if (active) {
             setBook(result);
@@ -60,6 +63,7 @@ export default function BookDetailScreen() {
             setCanLend(isWriter(household.role));
             setAddedByLabel(result ? attributionName(result.addedBy, members) : null);
             setActiveCheckout(checkout);
+            setLoanHistory(history);
           }
         } catch (error) {
           if (active) {
@@ -158,9 +162,13 @@ export default function BookDetailScreen() {
           itemType="book"
           itemId={book.id}
           activeCheckout={activeCheckout}
-          onChanged={setActiveCheckout}
+          onChanged={(next) => {
+            setActiveCheckout(next);
+            void listItemCheckouts('book', book.id).then(setLoanHistory);
+          }}
           canWrite={canLend}
         />
+        <LoanHistory loans={loanHistory} />
         {canEdit ? (
           <PrimaryButton
             label="Refresh from Open Library"

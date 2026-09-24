@@ -1626,3 +1626,280 @@ grant execute on function public.create_household(text) to authenticated;
 grant execute on function public.leave_household(boolean) to authenticated;
 grant execute on function public.set_member_role(uuid, text) to authenticated;
 grant execute on function public.remove_household_member(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Phase 7 — lending rules and loan history
+-- Fresh installs run this after the statements above.
+-- Existing projects: run from this banner to the end of the file.
+-- ---------------------------------------------------------------------------
+
+alter table public.checkouts
+  add column if not exists cancelled_at timestamptz;
+
+alter table public.checkouts drop constraint if exists checkouts_one_outcome;
+alter table public.checkouts
+  add constraint checkouts_one_outcome
+  check (returned_at is null or cancelled_at is null);
+
+drop index if exists public.checkouts_one_active_per_item;
+create unique index checkouts_one_active_per_item
+  on public.checkouts (household_id, item_type, item_id)
+  where returned_at is null and cancelled_at is null;
+
+drop policy if exists "Writers can insert household checkouts" on public.checkouts;
+create policy "Writers can insert household checkouts"
+  on public.checkouts for insert
+  with check (
+    public.is_household_writer(household_id)
+    and household_id = public.current_household_id()
+    and returned_at is null
+    and cancelled_at is null
+  );
+
+create or replace function public.checkout_item(
+  p_item_type text,
+  p_item_id uuid,
+  p_borrower_name text,
+  p_notes text default null
+)
+returns public.checkouts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+  row public.checkouts;
+  borrower text := trim(p_borrower_name);
+  movie_bluray boolean;
+  movie_4k boolean;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_writer(hid) then
+    raise exception 'Viewers cannot check out items';
+  end if;
+  if p_item_type not in ('movie', 'book') then
+    raise exception 'Invalid item type';
+  end if;
+  if borrower is null or length(borrower) < 1 then
+    raise exception 'Enter a borrower name';
+  end if;
+
+  if p_item_type = 'movie' then
+    select has_bluray, has_4k into movie_bluray, movie_4k
+    from public.movies
+    where id = p_item_id and household_id = hid;
+
+    if movie_bluray is null then
+      raise exception 'Movie not found in your household';
+    end if;
+    if not movie_bluray and not movie_4k then
+      raise exception 'Digital-only movies cannot be checked out';
+    end if;
+  else
+    if not exists (
+      select 1 from public.books
+      where id = p_item_id and household_id = hid
+    ) then
+      raise exception 'Book not found in your household';
+    end if;
+  end if;
+
+  if exists (
+    select 1 from public.checkouts
+    where household_id = hid
+      and item_type = p_item_type
+      and item_id = p_item_id
+      and returned_at is null
+      and cancelled_at is null
+  ) then
+    raise exception 'This item is already checked out';
+  end if;
+
+  insert into public.checkouts (
+    household_id, item_type, item_id, borrower_name, checked_out_by, notes
+  )
+  values (hid, p_item_type, p_item_id, borrower, auth.uid(), nullif(trim(p_notes), ''))
+  returning * into row;
+
+  return row;
+end;
+$$;
+
+create or replace function public.return_item(p_checkout_id uuid)
+returns public.checkouts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+  row public.checkouts;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_writer(hid) then
+    raise exception 'Viewers cannot return items';
+  end if;
+
+  update public.checkouts
+  set returned_at = now()
+  where id = p_checkout_id
+    and household_id = hid
+    and returned_at is null
+    and cancelled_at is null
+  returning * into row;
+
+  if row.id is null then
+    raise exception 'Active checkout not found';
+  end if;
+
+  return row;
+end;
+$$;
+
+create or replace function public.cancel_checkout(p_checkout_id uuid)
+returns public.checkouts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+  row public.checkouts;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_writer(hid) then
+    raise exception 'Viewers cannot cancel loans';
+  end if;
+
+  update public.checkouts
+  set cancelled_at = now()
+  where id = p_checkout_id
+    and household_id = hid
+    and returned_at is null
+    and cancelled_at is null
+  returning * into row;
+
+  if row.id is null then
+    raise exception 'Active checkout not found';
+  end if;
+
+  return row;
+end;
+$$;
+
+create or replace function public.update_checkout_borrower(
+  p_checkout_id uuid,
+  p_borrower_name text
+)
+returns public.checkouts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+  row public.checkouts;
+  borrower text := trim(p_borrower_name);
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_writer(hid) then
+    raise exception 'Viewers cannot change a loan';
+  end if;
+  if borrower is null or length(borrower) < 1 then
+    raise exception 'Enter a borrower name';
+  end if;
+
+  update public.checkouts
+  set borrower_name = borrower
+  where id = p_checkout_id
+    and household_id = hid
+    and returned_at is null
+    and cancelled_at is null
+  returning * into row;
+
+  if row.id is null then
+    raise exception 'Active checkout not found';
+  end if;
+
+  return row;
+end;
+$$;
+
+create or replace function public.household_library_summary()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+  member_count int;
+  admin_count int;
+  my_role text;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    return null;
+  end if;
+
+  select count(*) into member_count
+  from public.household_members
+  where household_id = hid;
+
+  select count(*) into admin_count
+  from public.household_members
+  where household_id = hid
+    and role = 'admin';
+
+  select role into my_role
+  from public.household_members
+  where household_id = hid
+    and user_id = auth.uid();
+
+  return jsonb_build_object(
+    'householdId', hid,
+    'householdName', (select name from public.households where id = hid),
+    'movies', (select count(*) from public.movies where household_id = hid),
+    'books', (select count(*) from public.books where household_id = hid),
+    'mtgCards', (select count(*) from public.mtg_cards where household_id = hid),
+    'decks', (select count(*) from public.mtg_decks where household_id = hid),
+    'activeCheckouts', (
+      select count(*) from public.checkouts
+      where household_id = hid
+        and returned_at is null
+        and cancelled_at is null
+    ),
+    'members', member_count,
+    'admins', admin_count,
+    'role', my_role,
+    'wouldDelete', member_count = 1,
+    'isSoleAdmin', my_role = 'admin' and admin_count = 1 and member_count > 1
+  );
+end;
+$$;
+
+grant execute on function public.cancel_checkout(uuid) to authenticated;
+grant execute on function public.update_checkout_borrower(uuid, text) to authenticated;

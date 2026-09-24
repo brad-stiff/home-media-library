@@ -3,6 +3,8 @@ import { supabase } from './supabase';
 
 export type CheckoutItemType = 'movie' | 'book';
 
+export type CheckoutStatus = 'active' | 'returned' | 'cancelled';
+
 export type Checkout = {
   id: string;
   householdId: string;
@@ -11,8 +13,13 @@ export type Checkout = {
   borrowerName: string;
   checkedOutAt: string;
   returnedAt: string | null;
+  cancelledAt: string | null;
   checkedOutBy: string | null;
   notes: string | null;
+};
+
+export type HouseholdLoan = Checkout & {
+  title: string;
 };
 
 type CheckoutRow = {
@@ -23,9 +30,16 @@ type CheckoutRow = {
   borrower_name: string;
   checked_out_at: string;
   returned_at: string | null;
+  cancelled_at: string | null;
   checked_out_by: string | null;
   notes: string | null;
 };
+
+export function checkoutStatus(checkout: Pick<Checkout, 'returnedAt' | 'cancelledAt'>): CheckoutStatus {
+  if (checkout.cancelledAt) return 'cancelled';
+  if (checkout.returnedAt) return 'returned';
+  return 'active';
+}
 
 function rowToCheckout(row: CheckoutRow): Checkout {
   return {
@@ -36,6 +50,7 @@ function rowToCheckout(row: CheckoutRow): Checkout {
     borrowerName: row.borrower_name,
     checkedOutAt: row.checked_out_at,
     returnedAt: row.returned_at,
+    cancelledAt: row.cancelled_at,
     checkedOutBy: row.checked_out_by,
     notes: row.notes,
   };
@@ -51,6 +66,7 @@ export async function getActiveCheckout(
     .eq('item_type', itemType)
     .eq('item_id', itemId)
     .is('returned_at', null)
+    .is('cancelled_at', null)
     .maybeSingle();
 
   if (error) throw error;
@@ -70,7 +86,8 @@ export async function getActiveCheckoutsByItemIds(
     .select('*')
     .eq('item_type', itemType)
     .in('item_id', itemIds)
-    .is('returned_at', null);
+    .is('returned_at', null)
+    .is('cancelled_at', null);
 
   if (error) throw error;
   for (const row of (data as CheckoutRow[]) ?? []) {
@@ -105,15 +122,71 @@ export async function returnCheckout(checkoutId: string): Promise<Checkout> {
   return rowToCheckout(data as CheckoutRow);
 }
 
-export async function listActiveCheckouts(): Promise<Checkout[]> {
+export async function cancelCheckout(checkoutId: string): Promise<Checkout> {
+  const { data, error } = await supabase.rpc('cancel_checkout', {
+    p_checkout_id: checkoutId,
+  });
+
+  if (error) throw error;
+  return rowToCheckout(data as CheckoutRow);
+}
+
+export async function updateCheckoutBorrower(checkoutId: string, borrowerName: string): Promise<Checkout> {
+  const { data, error } = await supabase.rpc('update_checkout_borrower', {
+    p_checkout_id: checkoutId,
+    p_borrower_name: borrowerName.trim(),
+  });
+
+  if (error) throw error;
+  return rowToCheckout(data as CheckoutRow);
+}
+
+export async function listItemCheckouts(
+  itemType: CheckoutItemType,
+  itemId: string,
+): Promise<Checkout[]> {
+  const { data, error } = await supabase
+    .from('checkouts')
+    .select('*')
+    .eq('item_type', itemType)
+    .eq('item_id', itemId)
+    .order('checked_out_at', { ascending: false });
+
+  if (error) throw error;
+  return ((data as CheckoutRow[]) ?? []).map(rowToCheckout);
+}
+
+export async function listHouseholdLoans(): Promise<HouseholdLoan[]> {
   const household = await getMyHousehold();
   const { data, error } = await supabase
     .from('checkouts')
     .select('*')
     .eq('household_id', household.householdId)
-    .is('returned_at', null)
     .order('checked_out_at', { ascending: false });
 
   if (error) throw error;
-  return ((data as CheckoutRow[]) ?? []).map(rowToCheckout);
+  const rows = ((data as CheckoutRow[]) ?? []).map(rowToCheckout);
+  const movieIds = rows.filter((row) => row.itemType === 'movie').map((row) => row.itemId);
+  const bookIds = rows.filter((row) => row.itemType === 'book').map((row) => row.itemId);
+
+  const [movies, books] = await Promise.all([
+    movieIds.length
+      ? supabase.from('movies').select('id, title').in('id', movieIds)
+      : Promise.resolve({ data: [], error: null }),
+    bookIds.length
+      ? supabase.from('books').select('id, title').in('id', bookIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (movies.error) throw movies.error;
+  if (books.error) throw books.error;
+
+  const titles = new Map<string, string>();
+  for (const movie of movies.data ?? []) titles.set(movie.id, movie.title);
+  for (const book of books.data ?? []) titles.set(book.id, book.title);
+
+  return rows.map((row) => ({
+    ...row,
+    title: titles.get(row.itemId) ?? 'Removed item',
+  }));
 }
