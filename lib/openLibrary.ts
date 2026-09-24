@@ -88,6 +88,32 @@ export async function lookupBookByIsbn(isbn: string): Promise<BookLookupResult |
   };
 }
 
+export async function lookupOpenLibraryKey(key: string): Promise<BookLookupResult | null> {
+  const path = key.startsWith('/') ? key : `/${key}`;
+  const response = await fetch(`https://openlibrary.org${path}.json`);
+  if (!response.ok) {
+    throw new Error(`Open Library request failed (${response.status})`);
+  }
+
+  const entry = (await response.json()) as OpenLibraryEdition & { covers?: number[] };
+  if (!entry.title) return null;
+
+  const authors =
+    entry.authors?.map((author) => author.name).filter((name): name is string => Boolean(name)) ??
+    [];
+  const coverId = entry.covers?.[0];
+
+  return {
+    isbn: null,
+    title: entry.title,
+    authors,
+    year: extractYear(entry.publish_date),
+    coverUrl: entry.cover?.large ?? entry.cover?.medium ?? (coverId ? coverFromCoverId(coverId) : null),
+    overview: extractDescription(entry.description),
+    openLibraryKey: entry.key ?? path,
+  };
+}
+
 export async function searchBooks(query: string): Promise<BookLookupResult[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];

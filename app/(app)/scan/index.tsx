@@ -13,11 +13,12 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '../../../components/PrimaryButton';
+import { WriterOnly } from '../../../components/WriterOnly';
 import { isIsbn, normalizeBarcode } from '../../../lib/barcode';
 import { resolveBarcode } from '../../../lib/barcodeResolve';
 import { radius, spacing, useTheme } from '../../../lib/theme';
 
-export default function ScanScreen() {
+function ScanScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -280,3 +281,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
 });
+
+export default function ScanRoute() {
+  return (
+    <WriterOnly>
+      <ScanScreen />
+    </WriterOnly>
+  );
+}

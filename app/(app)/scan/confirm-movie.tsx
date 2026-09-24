@@ -16,6 +16,7 @@ import {
 import { MoviePoster } from '../../../components/MoviePoster';
 import { OwnershipPicker } from '../../../components/OwnershipPicker';
 import { PrimaryButton } from '../../../components/PrimaryButton';
+import { WriterOnly } from '../../../components/WriterOnly';
 import { addMovie } from '../../../lib/movies';
 import { spacing, useTheme } from '../../../lib/theme';
 import { getMovieDetails, movieSearchSubtitle } from '../../../lib/tmdb';
@@ -28,7 +29,7 @@ const DEFAULT_OWNERSHIP: MovieOwnership = {
   platform: null,
 };
 
-export default function ConfirmMovieFromScanScreen() {
+function ConfirmMovieFromScanScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const params = useLocalSearchParams<{
@@ -208,3 +209,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default function ConfirmMovieRoute() {
+  return (
+    <WriterOnly>
+      <ConfirmMovieFromScanScreen />
+    </WriterOnly>
+  );
+}

@@ -4,8 +4,9 @@ import { supabase } from './supabase';
 export type HouseholdMembership = {
   householdId: string;
   role: HouseholdRole;
-  inviteCode: string;
+  inviteCode: string | null;
   name: string;
+  createdBy: string;
 };
 
 export type HouseholdMember = {
@@ -15,31 +16,73 @@ export type HouseholdMember = {
   joinedAt: string;
 };
 
-export async function getMyHousehold(): Promise<HouseholdMembership> {
+export type LibrarySummary = {
+  householdId: string;
+  householdName: string;
+  movies: number;
+  books: number;
+  mtgCards: number;
+  decks: number;
+  activeCheckouts: number;
+  members: number;
+  admins: number;
+  role: HouseholdRole;
+  wouldDelete: boolean;
+  isSoleAdmin: boolean;
+};
+
+export function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
+export function isTransferAdminError(error: unknown): boolean {
+  return errorMessage(error, '').toLowerCase().includes('transfer admin');
+}
+
+export function isConfirmDeleteError(error: unknown): boolean {
+  return errorMessage(error, '').toLowerCase().includes('delete the household');
+}
+
+export async function fetchMyHousehold(): Promise<HouseholdMembership | null> {
   const { data: membership, error: membershipError } = await supabase
     .from('household_members')
     .select('household_id, role')
     .maybeSingle();
 
   if (membershipError) throw membershipError;
-  if (!membership) {
-    throw new Error('No household found for this account. Try signing out and back in.');
-  }
+  if (!membership) return null;
 
   const { data: household, error: householdError } = await supabase
     .from('households')
-    .select('id, name, invite_code')
+    .select('id, name, created_by')
     .eq('id', membership.household_id)
     .single();
 
   if (householdError) throw householdError;
 
+  let inviteCode: string | null = null;
+  if (membership.role === 'admin') {
+    const { data: code, error: codeError } = await supabase.rpc('get_invite_code');
+    if (codeError) throw codeError;
+    inviteCode = code as string;
+  }
+
   return {
     householdId: household.id,
     role: membership.role as HouseholdRole,
-    inviteCode: household.invite_code,
+    inviteCode,
     name: household.name,
+    createdBy: household.created_by,
   };
+}
+
+export async function getMyHousehold(): Promise<HouseholdMembership> {
+  const household = await fetchMyHousehold();
+  if (!household) {
+    throw new Error('Create or join a household before using the library.');
+  }
+  return household;
 }
 
 export async function listHouseholdMembers(): Promise<HouseholdMember[]> {
@@ -53,7 +96,7 @@ export async function listHouseholdMembers(): Promise<HouseholdMember[]> {
 
   if (membersError) throw membersError;
 
-  const userIds = (members ?? []).map((m) => m.user_id);
+  const userIds = (members ?? []).map((member) => member.user_id);
   const { data: profiles, error: profilesError } = await supabase
     .from('profiles')
     .select('id, display_name')
@@ -61,14 +104,28 @@ export async function listHouseholdMembers(): Promise<HouseholdMember[]> {
 
   if (profilesError) throw profilesError;
 
-  const nameById = new Map((profiles ?? []).map((p) => [p.id, p.display_name as string | null]));
+  const nameById = new Map(
+    (profiles ?? []).map((profile) => [profile.id, profile.display_name as string | null]),
+  );
 
-  return (members ?? []).map((m) => ({
-    userId: m.user_id,
-    role: m.role as HouseholdRole,
-    displayName: nameById.get(m.user_id) ?? null,
-    joinedAt: m.joined_at,
+  return (members ?? []).map((member) => ({
+    userId: member.user_id,
+    role: member.role as HouseholdRole,
+    displayName: nameById.get(member.user_id) ?? null,
+    joinedAt: member.joined_at,
   }));
+}
+
+export async function getLibrarySummary(): Promise<LibrarySummary | null> {
+  const { data, error } = await supabase.rpc('household_library_summary');
+  if (error) throw error;
+  if (!data) return null;
+  return data as LibrarySummary;
+}
+
+export async function createHousehold(name: string): Promise<void> {
+  const { error } = await supabase.rpc('create_household', { p_name: name.trim() });
+  if (error) throw error;
 }
 
 export async function updateHouseholdName(name: string): Promise<void> {
@@ -90,8 +147,35 @@ export async function joinHousehold(code: string, force = false): Promise<void> 
   if (error) throw error;
 }
 
-/** True when Postgres raised our "has movies / force" guard. */
-export function isJoinNeedsForceError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.toLowerCase().includes('force');
+export async function leaveHousehold(acknowledge: boolean): Promise<void> {
+  const { error } = await supabase.rpc('leave_household', { p_acknowledge: acknowledge });
+  if (error) throw error;
+}
+
+export async function setMemberRole(userId: string, role: HouseholdRole): Promise<void> {
+  const { error } = await supabase.rpc('set_member_role', {
+    p_user_id: userId,
+    p_role: role,
+  });
+  if (error) throw error;
+}
+
+export async function removeHouseholdMember(userId: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_household_member', { p_user_id: userId });
+  if (error) throw error;
+}
+
+export function libraryCountLines(summary: LibrarySummary): string[] {
+  const lines = [
+    `${summary.movies} ${summary.movies === 1 ? 'movie' : 'movies'}`,
+    `${summary.books} ${summary.books === 1 ? 'book' : 'books'}`,
+    `${summary.mtgCards} ${summary.mtgCards === 1 ? 'MTG card row' : 'MTG card rows'}`,
+    `${summary.decks} ${summary.decks === 1 ? 'deck' : 'decks'}`,
+  ];
+  if (summary.activeCheckouts > 0) {
+    lines.push(
+      `${summary.activeCheckouts} active ${summary.activeCheckouts === 1 ? 'checkout' : 'checkouts'} (does not block leaving)`,
+    );
+  }
+  return lines;
 }

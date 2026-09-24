@@ -17,6 +17,7 @@ export type MtgCard = {
   imageUri: string | null;
   qty: number;
   foil: boolean;
+  addedBy: string | null;
   addedAt: string;
 };
 
@@ -35,6 +36,7 @@ type MtgCardRow = {
   image_uri: string | null;
   qty: number;
   foil: boolean;
+  added_by: string | null;
   created_at: string;
 };
 
@@ -54,6 +56,7 @@ function rowToCard(row: MtgCardRow): MtgCard {
     imageUri: row.image_uri,
     qty: row.qty,
     foil: row.foil,
+    addedBy: row.added_by,
     addedAt: row.created_at,
   };
 }
@@ -108,7 +111,12 @@ export async function addMtgCardFromScryfall(
       .eq('id', row.id)
       .select('*')
       .single();
-    if (error) throw error;
+    if (error) {
+      if (error.code === '42501' || error.message.toLowerCase().includes('policy')) {
+        throw new Error('Only the person who added this card, or an admin, can change the quantity.');
+      }
+      throw error;
+    }
     return rowToCard(data as MtgCardRow);
   }
 
@@ -142,16 +150,27 @@ export async function updateMtgCardQty(id: string, qty: number): Promise<void> {
     await deleteMtgCard(id);
     return;
   }
-  const { error } = await supabase.from('mtg_cards').update({ qty }).eq('id', id);
-  if (error) throw error;
+  const { data, error } = await supabase.from('mtg_cards').update({ qty }).eq('id', id).select('id');
+  if (error) {
+    if (error.code === '42501' || error.message.toLowerCase().includes('policy')) {
+      throw new Error('Only the person who added this card, or an admin, can change the quantity.');
+    }
+    throw error;
+  }
+  if (!data?.length) {
+    throw new Error('Only the person who added this card, or an admin, can change the quantity.');
+  }
 }
 
 export async function deleteMtgCard(id: string): Promise<void> {
-  const { error } = await supabase.from('mtg_cards').delete().eq('id', id);
+  const { data, error } = await supabase.from('mtg_cards').delete().eq('id', id).select('id');
   if (error) {
     if (error.code === '42501' || error.message.toLowerCase().includes('policy')) {
-      throw new Error('Only household admins can remove collection cards.');
+      throw new Error('Only the person who added this card, or an admin, can remove it.');
     }
     throw error;
+  }
+  if (!data?.length) {
+    throw new Error('Only the person who added this card, or an admin, can remove it.');
   }
 }

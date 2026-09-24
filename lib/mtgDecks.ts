@@ -8,6 +8,7 @@ export type MtgDeck = {
   name: string;
   description: string | null;
   archidektId: string | null;
+  createdBy: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -32,6 +33,7 @@ type DeckRow = {
   name: string;
   description: string | null;
   archidekt_id: string | null;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -57,6 +59,7 @@ function rowToDeck(row: DeckRow): MtgDeck {
     name: row.name,
     description: row.description,
     archidektId: row.archidekt_id,
+    createdBy: row.created_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -128,12 +131,15 @@ export async function createMtgDeck(name: string, description?: string): Promise
 }
 
 export async function deleteMtgDeck(id: string): Promise<void> {
-  const { error } = await supabase.from('mtg_decks').delete().eq('id', id);
+  const { data, error } = await supabase.from('mtg_decks').delete().eq('id', id).select('id');
   if (error) {
     if (error.code === '42501' || error.message.toLowerCase().includes('policy')) {
-      throw new Error('Only household admins can delete decks.');
+      throw new Error('Only the person who created this deck, or an admin, can delete it.');
     }
     throw error;
+  }
+  if (!data?.length) {
+    throw new Error('Only the person who created this deck, or an admin, can delete it.');
   }
 }
 

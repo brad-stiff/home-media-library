@@ -17,7 +17,7 @@ export interface TmdbMovieDetails {
   genres: { id: number; name: string }[];
 }
 
-export type HouseholdRole = 'admin' | 'member';
+export type HouseholdRole = 'admin' | 'member' | 'viewer';
 
 export interface MovieOwnership {
   hasBluray: boolean;

@@ -15,12 +15,13 @@ import {
 } from 'react-native';
 
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { WriterOnly } from '../../components/WriterOnly';
 import { SearchInput } from '../../components/SearchInput';
 import { addBookFromLookup } from '../../lib/books';
 import { BookLookupResult, bookSearchSubtitle, searchBooks } from '../../lib/openLibrary';
 import { spacing, useTheme } from '../../lib/theme';
 
-export default function AddBookScreen() {
+function AddBookScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { q } = useLocalSearchParams<{ q?: string }>();
@@ -303,3 +304,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
+export default function AddBookRoute() {
+  return (
+    <WriterOnly>
+      <AddBookScreen />
+    </WriterOnly>
+  );
+}

@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider, useAuth } from '../lib/auth';
 import { useTheme } from '../lib/theme';
+import { ToastProvider } from '../lib/toast';
 
 function RootNavigator() {
   const { session, isReady } = useAuth();
@@ -47,9 +48,11 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <RootNavigator />
+        </AuthProvider>
+      </ToastProvider>
     </GestureHandlerRootView>
   );
 }

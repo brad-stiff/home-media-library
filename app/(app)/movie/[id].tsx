@@ -12,9 +12,12 @@ import {
 
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { CheckoutPanel } from '../../../components/CheckoutPanel';
+import { useAuth } from '../../../lib/auth';
 import { Checkout, getActiveCheckout } from '../../../lib/checkouts';
-import { getMyHousehold } from '../../../lib/household';
+import { listHouseholdMembers } from '../../../lib/household';
+import { useHousehold } from '../../../lib/householdContext';
 import { deleteMovie, getMovieById } from '../../../lib/movies';
+import { attributionName, canDeleteOwned, canEditHouseholdFacts, isWriter } from '../../../lib/roles';
 import { backdropUrl, formatRuntime, radius, spacing, useTheme } from '../../../lib/theme';
 import { formatOwnershipLabel, Movie } from '../../../lib/types';
 
@@ -22,10 +25,15 @@ export default function MovieDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const { household } = useHousehold();
   const [movie, setMovie] = useState<Movie | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  const [canLend, setCanLend] = useState(false);
+  const [addedByLabel, setAddedByLabel] = useState<string | null>(null);
   const [activeCheckout, setActiveCheckout] = useState<Checkout | null>(null);
 
   useFocusEffect(
@@ -33,17 +41,25 @@ export default function MovieDetailScreen() {
       let active = true;
 
       (async () => {
-        if (!id) return;
+        if (!id || !household) return;
         setLoading(true);
         try {
-          const [result, household, checkout] = await Promise.all([
+          const [result, members, checkout] = await Promise.all([
             getMovieById(id),
-            getMyHousehold(),
+            listHouseholdMembers(),
             getActiveCheckout('movie', id),
           ]);
           if (active) {
             setMovie(result);
-            setIsAdmin(household.role === 'admin');
+            const memberIds = new Set(members.map((member) => member.userId));
+            setCanEdit(
+              result != null && canEditHouseholdFacts(household.role, result.addedBy, memberIds),
+            );
+            setCanDelete(
+              result != null && canDeleteOwned(household.role, result.addedBy, user?.id ?? null),
+            );
+            setCanLend(isWriter(household.role));
+            setAddedByLabel(result ? attributionName(result.addedBy, members) : null);
             setActiveCheckout(checkout);
           }
         } catch (error) {
@@ -60,7 +76,7 @@ export default function MovieDetailScreen() {
       return () => {
         active = false;
       };
-    }, [id]),
+    }, [household, id, user?.id]),
   );
 
   const handleDelete = () => {
@@ -178,6 +194,7 @@ export default function MovieDetailScreen() {
               itemId={movie.id}
               activeCheckout={activeCheckout}
               onChanged={setActiveCheckout}
+              canWrite={canLend}
             />
           </View>
 
@@ -188,10 +205,15 @@ export default function MovieDetailScreen() {
             </Text>
             <Text style={[styles.addedText, { color: colors.textSecondary }]}>
               Added {new Date(movie.addedAt).toLocaleDateString()}
+              {addedByLabel ? ` · ${addedByLabel}` : ''}
             </Text>
           </View>
 
-          {isAdmin ? (
+          {canEdit ? (
+            <PrimaryButton label="Edit formats" onPress={() => router.push(`/edit-movie?id=${movie.id}`)} />
+          ) : null}
+
+          {canDelete ? (
             <PrimaryButton
               label="Remove from Library"
               onPress={handleDelete}
@@ -200,7 +222,9 @@ export default function MovieDetailScreen() {
             />
           ) : (
             <Text style={[styles.addedText, { color: colors.textTertiary }]}>
-              Only household admins can remove movies.
+              {canLend
+                ? 'You can remove movies you added. Admins can remove any movie.'
+                : 'Viewers can browse this movie.'}
             </Text>
           )}
         </View>

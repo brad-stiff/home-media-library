@@ -4,11 +4,12 @@ import { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '../../../components/PrimaryButton';
+import { WriterOnly } from '../../../components/WriterOnly';
 import { addBookFromLookup } from '../../../lib/books';
 import { BookLookupResult } from '../../../lib/openLibrary';
 import { spacing, useTheme } from '../../../lib/theme';
 
-export default function ConfirmBookScreen() {
+function ConfirmBookScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { payload } = useLocalSearchParams<{ payload: string }>();
@@ -100,3 +101,11 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 });
+
+export default function ConfirmBookRoute() {
+  return (
+    <WriterOnly>
+      <ConfirmBookScreen />
+    </WriterOnly>
+  );
+}

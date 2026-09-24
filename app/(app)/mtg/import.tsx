@@ -12,11 +12,12 @@ import {
 
 import { AuthTextField } from '../../../components/AuthForm';
 import { PrimaryButton } from '../../../components/PrimaryButton';
+import { WriterOnly } from '../../../components/WriterOnly';
 import { fetchArchidektDeck } from '../../../lib/archidekt';
 import { createMtgDeck, importArchidektDeck } from '../../../lib/mtgDecks';
 import { spacing, useTheme } from '../../../lib/theme';
 
-export default function ImportMtgDeckScreen() {
+function ImportMtgDeckScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const [archidekt, setArchidekt] = useState('');
@@ -116,3 +117,11 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 });
+
+export default function ImportMtgDeckRoute() {
+  return (
+    <WriterOnly>
+      <ImportMtgDeckScreen />
+    </WriterOnly>
+  );
+}

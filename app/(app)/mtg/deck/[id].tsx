@@ -12,7 +12,9 @@ import {
 } from 'react-native';
 
 import { PrimaryButton } from '../../../../components/PrimaryButton';
+import { useAuth } from '../../../../lib/auth';
 import { getMyHousehold } from '../../../../lib/household';
+import { canDeleteOwned } from '../../../../lib/roles';
 import {
   deleteMtgDeck,
   getMtgDeck,
@@ -26,10 +28,11 @@ export default function MtgDeckDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors } = useTheme();
+  const { user } = useAuth();
   const [deck, setDeck] = useState<MtgDeck | null>(null);
   const [cards, setCards] = useState<MtgDeckCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
@@ -43,14 +46,14 @@ export default function MtgDeckDetailScreen() {
       ]);
       setDeck(d);
       setCards(c);
-      setIsAdmin(household.role === 'admin');
+      setCanDelete(d != null && canDeleteOwned(household.role, d.createdBy, user?.id ?? null));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load deck.';
       Alert.alert('Error', message);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -121,7 +124,7 @@ export default function MtgDeckDetailScreen() {
                 Commander: {commanders.map((c) => c.name).join(', ')}
               </Text>
             ) : null}
-            {isAdmin ? (
+            {canDelete ? (
               <PrimaryButton
                 label="Delete deck"
                 onPress={handleDelete}

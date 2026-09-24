@@ -21,6 +21,7 @@ type CheckoutPanelProps = {
   itemId: string;
   activeCheckout: Checkout | null;
   onChanged: (next: Checkout | null) => void;
+  canWrite: boolean;
 };
 
 export function CheckoutPanel({
@@ -28,6 +29,7 @@ export function CheckoutPanel({
   itemId,
   activeCheckout,
   onChanged,
+  canWrite,
 }: CheckoutPanelProps) {
   const { colors } = useTheme();
   const [borrower, setBorrower] = useState('');
@@ -82,7 +84,16 @@ export function CheckoutPanel({
         <Text style={[styles.meta, { color: colors.textSecondary }]}>
           Since {new Date(activeCheckout.checkedOutAt).toLocaleDateString()}
         </Text>
-        <PrimaryButton label="Mark returned" onPress={handleReturn} loading={busy} />
+        {canWrite ? <PrimaryButton label="Mark returned" onPress={handleReturn} loading={busy} /> : null}
+      </View>
+    );
+  }
+
+  if (!canWrite) {
+    return (
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>Lending</Text>
+        <Text style={[styles.meta, { color: colors.textTertiary }]}>Available</Text>
       </View>
     );
   }

@@ -13,11 +13,12 @@ import {
 } from 'react-native';
 
 import { SearchInput } from '../../../components/SearchInput';
+import { WriterOnly } from '../../../components/WriterOnly';
 import { addMtgCardFromScryfall } from '../../../lib/mtgCards';
 import { searchScryfallCards, ScryfallCard, scryfallImageUri } from '../../../lib/scryfall';
 import { radius, spacing, useTheme } from '../../../lib/theme';
 
-export default function AddMtgCardScreen() {
+function AddMtgCardScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const [query, setQuery] = useState('');
@@ -179,3 +180,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default function AddMtgCardRoute() {
+  return (
+    <WriterOnly>
+      <AddMtgCardScreen />
+    </WriterOnly>
+  );
+}

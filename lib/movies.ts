@@ -1,4 +1,5 @@
 import { extractYear } from './theme';
+import { getMovieDetails } from './tmdb';
 import { getMyHousehold } from './household';
 import { supabase } from './supabase';
 import { Movie, MovieOwnership, MovieRow, TmdbMovieDetails } from './types';
@@ -132,12 +133,67 @@ export async function addMovie(
   return rowToMovie(data as MovieRow);
 }
 
-export async function deleteMovie(id: string): Promise<void> {
-  const { error } = await supabase.from('movies').delete().eq('id', id);
+export async function updateMovieOwnership(id: string, ownership: MovieOwnership): Promise<void> {
+  assertOwnership(ownership);
+  const { data, error } = await supabase
+    .from('movies')
+    .update({
+      has_bluray: ownership.hasBluray,
+      has_4k: ownership.has4k,
+      has_digital: ownership.hasDigital,
+      platform: ownership.platform?.trim() || null,
+    })
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+
   if (error) {
     if (error.code === '42501' || error.message.toLowerCase().includes('policy')) {
-      throw new Error('Only household admins can remove movies.');
+      throw new Error('You cannot edit this movie.');
     }
     throw error;
+  }
+  if (!data) {
+    throw new Error('You cannot edit this movie.');
+  }
+}
+
+export async function refreshMovieFromTmdb(movie: Movie): Promise<Movie> {
+  const details = await getMovieDetails(movie.tmdbId);
+  const { data, error } = await supabase
+    .from('movies')
+    .update({
+      title: details.title,
+      year: extractYear(details.release_date),
+      poster_path: details.poster_path,
+      backdrop_path: details.backdrop_path,
+      overview: details.overview,
+      runtime: details.runtime,
+      genres: details.genres.map((genre) => genre.name),
+    })
+    .eq('id', movie.id)
+    .select('*')
+    .single();
+
+  if (error) {
+    if (error.code === '42501' || error.message.toLowerCase().includes('policy')) {
+      throw new Error('You cannot refresh this movie.');
+    }
+    throw error;
+  }
+
+  return rowToMovie(data as MovieRow);
+}
+
+export async function deleteMovie(id: string): Promise<void> {
+  const { data, error } = await supabase.from('movies').delete().eq('id', id).select('id');
+  if (error) {
+    if (error.code === '42501' || error.message.toLowerCase().includes('policy')) {
+      throw new Error('You can only remove movies you added. Admins can remove any movie.');
+    }
+    throw error;
+  }
+  if (!data?.length) {
+    throw new Error('You can only remove movies you added. Admins can remove any movie.');
   }
 }

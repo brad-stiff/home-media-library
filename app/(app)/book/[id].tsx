@@ -12,36 +12,53 @@ import {
 
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { CheckoutPanel } from '../../../components/CheckoutPanel';
-import { Book, deleteBook, getBookById } from '../../../lib/books';
+import { useAuth } from '../../../lib/auth';
+import { Book, deleteBook, getBookById, refreshBookFromOpenLibrary } from '../../../lib/books';
 import { Checkout, getActiveCheckout } from '../../../lib/checkouts';
-import { getMyHousehold } from '../../../lib/household';
+import { listHouseholdMembers } from '../../../lib/household';
+import { useHousehold } from '../../../lib/householdContext';
+import { attributionName, canDeleteOwned, canEditHouseholdFacts, isWriter } from '../../../lib/roles';
 import { spacing, useTheme } from '../../../lib/theme';
 
 export default function BookDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const { household } = useHousehold();
   const [book, setBook] = useState<Book | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  const [canLend, setCanLend] = useState(false);
+  const [addedByLabel, setAddedByLabel] = useState<string | null>(null);
   const [activeCheckout, setActiveCheckout] = useState<Checkout | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
       (async () => {
-        if (!id) return;
+        if (!id || !household) return;
         setLoading(true);
         try {
-          const [result, household, checkout] = await Promise.all([
+          const [result, members, checkout] = await Promise.all([
             getBookById(id),
-            getMyHousehold(),
+            listHouseholdMembers(),
             getActiveCheckout('book', id),
           ]);
           if (active) {
             setBook(result);
-            setIsAdmin(household.role === 'admin');
+            const memberIds = new Set(members.map((member) => member.userId));
+            setCanEdit(
+              result != null && canEditHouseholdFacts(household.role, result.addedBy, memberIds),
+            );
+            setCanDelete(
+              result != null && canDeleteOwned(household.role, result.addedBy, user?.id ?? null),
+            );
+            setCanLend(isWriter(household.role));
+            setAddedByLabel(result ? attributionName(result.addedBy, members) : null);
             setActiveCheckout(checkout);
           }
         } catch (error) {
@@ -57,7 +74,7 @@ export default function BookDetailScreen() {
       return () => {
         active = false;
       };
-    }, [id]),
+    }, [household, id, user?.id]),
   );
 
   const handleDelete = () => {
@@ -80,6 +97,20 @@ export default function BookDetailScreen() {
         },
       },
     ]);
+  };
+
+  const handleRefresh = async () => {
+    if (!book) return;
+    setRefreshing(true);
+    try {
+      setBook(await refreshBookFromOpenLibrary(book));
+      Alert.alert('Updated', 'Book details were refreshed from Open Library.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not refresh this book.';
+      Alert.alert('Error', message);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   if (loading) {
@@ -121,14 +152,24 @@ export default function BookDetailScreen() {
         ) : null}
         <Text style={[styles.meta, { color: colors.textTertiary }]}>
           Added {new Date(book.addedAt).toLocaleDateString()}
+          {addedByLabel ? ` · ${addedByLabel}` : ''}
         </Text>
         <CheckoutPanel
           itemType="book"
           itemId={book.id}
           activeCheckout={activeCheckout}
           onChanged={setActiveCheckout}
+          canWrite={canLend}
         />
-        {isAdmin ? (
+        {canEdit ? (
+          <PrimaryButton
+            label="Refresh from Open Library"
+            onPress={handleRefresh}
+            loading={refreshing}
+            disabled={!book.isbn && !book.openLibraryKey}
+          />
+        ) : null}
+        {canDelete ? (
           <PrimaryButton
             label="Remove from Library"
             onPress={handleDelete}
@@ -136,7 +177,11 @@ export default function BookDetailScreen() {
             variant="danger"
           />
         ) : (
-          <Text style={{ color: colors.textTertiary }}>Only household admins can remove books.</Text>
+          <Text style={{ color: colors.textTertiary }}>
+            {canLend
+              ? 'You can remove books you added. Admins can remove any book.'
+              : 'Viewers can browse this book.'}
+          </Text>
         )}
       </ScrollView>
     </>

@@ -17,6 +17,7 @@ import {
 import { MoviePoster } from '../../components/MoviePoster';
 import { OwnershipPicker } from '../../components/OwnershipPicker';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { WriterOnly } from '../../components/WriterOnly';
 import { SearchInput } from '../../components/SearchInput';
 import { addMovie } from '../../lib/movies';
 import { spacing, useTheme } from '../../lib/theme';
@@ -30,7 +31,7 @@ const DEFAULT_OWNERSHIP: MovieOwnership = {
   platform: null,
 };
 
-export default function AddMovieScreen() {
+function AddMovieScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { q } = useLocalSearchParams<{ q?: string }>();
@@ -314,3 +315,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+
+export default function AddMovieRoute() {
+  return (
+    <WriterOnly>
+      <AddMovieScreen />
+    </WriterOnly>
+  );
+}

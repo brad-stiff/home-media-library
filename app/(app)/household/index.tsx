@@ -15,19 +15,26 @@ import {
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { useAuth } from '../../../lib/auth';
 import {
+  errorMessage,
   getMyHousehold,
   HouseholdMember,
   HouseholdMembership,
   listHouseholdMembers,
   regenerateInviteCode,
+  removeHouseholdMember,
+  setMemberRole,
   updateHouseholdName,
 } from '../../../lib/household';
+import { useHousehold } from '../../../lib/householdContext';
+import { roleHint, roleLabel } from '../../../lib/roles';
 import { radius, spacing, useTheme } from '../../../lib/theme';
+import { HouseholdRole } from '../../../lib/types';
 
 export default function HouseholdScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const { user, signOut } = useAuth();
+  const { refresh } = useHousehold();
   const [household, setHousehold] = useState<HouseholdMembership | null>(null);
   const [members, setMembers] = useState<HouseholdMember[]>([]);
   const [nameDraft, setNameDraft] = useState('');
@@ -38,28 +45,31 @@ export default function HouseholdScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [h, m] = await Promise.all([getMyHousehold(), listHouseholdMembers()]);
-      setHousehold(h);
-      setNameDraft(h.name);
-      setMembers(m);
+      const [nextHousehold, nextMembers] = await Promise.all([
+        getMyHousehold(),
+        listHouseholdMembers(),
+      ]);
+      setHousehold(nextHousehold);
+      setNameDraft(nextHousehold.name);
+      setMembers(nextMembers);
+      await refresh();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not load household.';
-      Alert.alert('Error', message);
+      Alert.alert('Error', errorMessage(error, 'Could not load household.'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refresh]);
 
   useFocusEffect(
     useCallback(() => {
-      load();
+      void load();
     }, [load]),
   );
 
   const isAdmin = household?.role === 'admin';
 
   const handleCopyCode = async () => {
-    if (!household) return;
+    if (!household?.inviteCode) return;
     await Clipboard.setStringAsync(household.inviteCode);
     Alert.alert('Copied', 'Invite code copied to clipboard.');
   };
@@ -72,8 +82,7 @@ export default function HouseholdScreen() {
       await load();
       Alert.alert('Saved', 'Household name updated.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not rename household.';
-      Alert.alert('Error', message);
+      Alert.alert('Error', errorMessage(error, 'Could not rename household.'));
     } finally {
       setSavingName(false);
     }
@@ -81,27 +90,63 @@ export default function HouseholdScreen() {
 
   const handleRegenerate = () => {
     if (!isAdmin) return;
+    Alert.alert('New invite code?', 'The old code stops working immediately. There is no expiry until you regenerate.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Regenerate',
+        style: 'destructive',
+        onPress: async () => {
+          setRotating(true);
+          try {
+            const code = await regenerateInviteCode();
+            setHousehold((prev) => (prev ? { ...prev, inviteCode: code } : prev));
+          } catch (error) {
+            Alert.alert('Error', errorMessage(error, 'Could not regenerate code.'));
+          } finally {
+            setRotating(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleSetRole = (member: HouseholdMember, role: HouseholdRole) => {
+    void (async () => {
+      try {
+        await setMemberRole(member.userId, role);
+        await load();
+      } catch (error) {
+        Alert.alert('Could not change role', errorMessage(error, 'Try again.'));
+      }
+    })();
+  };
+
+  const handleChangeRole = (member: HouseholdMember) => {
+    const name = member.displayName || 'this member';
+    Alert.alert(`Role for ${name}`, 'Admins can set viewer, member, or admin.', [
+      { text: 'Viewer', onPress: () => handleSetRole(member, 'viewer') },
+      { text: 'Member', onPress: () => handleSetRole(member, 'member') },
+      { text: 'Admin', onPress: () => handleSetRole(member, 'admin') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handleRemove = (member: HouseholdMember) => {
+    const name = member.displayName || 'This member';
     Alert.alert(
-      'New invite code?',
-      'The old code will stop working immediately.',
+      'Remove member?',
+      `${name} will need to create or join a household. Items they added stay in the library and show Former member until they rejoin.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Regenerate',
+          text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            setRotating(true);
             try {
-              const code = await regenerateInviteCode();
-              setHousehold((prev: HouseholdMembership | null) =>
-                prev ? { ...prev, inviteCode: code } : prev,
-              );
+              await removeHouseholdMember(member.userId);
+              await load();
             } catch (error) {
-              const message =
-                error instanceof Error ? error.message : 'Could not regenerate code.';
-              Alert.alert('Error', message);
-            } finally {
-              setRotating(false);
+              Alert.alert('Could not remove member', errorMessage(error, 'Try again.'));
             }
           },
         },
@@ -150,35 +195,29 @@ export default function HouseholdScreen() {
       <View style={styles.section}>
         <Text style={[styles.label, { color: colors.textSecondary }]}>Your role</Text>
         <View style={[styles.badge, { backgroundColor: colors.accentMuted }]}>
-          <Text style={[styles.badgeText, { color: colors.accent }]}>
-            {household.role === 'admin' ? 'Admin' : 'Member'}
-          </Text>
+          <Text style={[styles.badgeText, { color: colors.accent }]}>{roleLabel(household.role)}</Text>
         </View>
-        <Text style={[styles.hint, { color: colors.textTertiary }]}>
-          {isAdmin
-            ? 'Admins manage the invite code and can remove movies.'
-            : 'Members can add and edit movies. Only admins can remove them.'}
-        </Text>
+        <Text style={[styles.hint, { color: colors.textTertiary }]}>{roleHint(household.role)}</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.label, { color: colors.textSecondary }]}>Invite code</Text>
-        <Pressable
-          onPress={handleCopyCode}
-          style={[styles.codeBox, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        >
-          <Text style={[styles.code, { color: colors.text }]}>{household.inviteCode}</Text>
-          <Text style={[styles.hint, { color: colors.textSecondary }]}>Tap to copy</Text>
-        </Pressable>
-        {isAdmin ? (
+      {isAdmin && household.inviteCode ? (
+        <View style={styles.section}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Invite code</Text>
+          <Pressable
+            onPress={handleCopyCode}
+            style={[styles.codeBox, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <Text style={[styles.code, { color: colors.text }]}>{household.inviteCode}</Text>
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>Tap to copy</Text>
+          </Pressable>
           <PrimaryButton
             label="Regenerate code"
             onPress={handleRegenerate}
             loading={rotating}
             variant="danger"
           />
-        ) : null}
-      </View>
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <Text style={[styles.label, { color: colors.textSecondary }]}>Members</Text>
@@ -195,9 +234,19 @@ export default function HouseholdScreen() {
                   {isYou ? ' (you)' : ''}
                 </Text>
                 <Text style={[styles.hint, { color: colors.textSecondary }]}>
-                  {member.role === 'admin' ? 'Admin' : 'Member'}
+                  {roleLabel(member.role)}
                 </Text>
               </View>
+              {isAdmin && !isYou ? (
+                <View style={styles.memberActions}>
+                  <Pressable onPress={() => handleChangeRole(member)} hitSlop={8}>
+                    <Text style={{ color: colors.accent, fontWeight: '700' }}>Role</Text>
+                  </Pressable>
+                  <Pressable onPress={() => handleRemove(member)} hitSlop={8}>
+                    <Text style={{ color: colors.danger, fontWeight: '700' }}>Remove</Text>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
           );
         })}
@@ -207,6 +256,11 @@ export default function HouseholdScreen() {
         <PrimaryButton
           label="Join a different household"
           onPress={() => router.push('/household/join')}
+        />
+        <PrimaryButton
+          label="Leave household"
+          onPress={() => router.push('/household/confirm-departure?intent=leave')}
+          variant="danger"
         />
         <Pressable
           onPress={async () => {
@@ -286,9 +340,17 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
     padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   memberMeta: {
+    flex: 1,
     gap: 2,
+  },
+  memberActions: {
+    gap: spacing.sm,
+    alignItems: 'flex-end',
   },
   memberName: {
     fontSize: 16,

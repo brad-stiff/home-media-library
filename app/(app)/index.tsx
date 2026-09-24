@@ -17,9 +17,12 @@ import { MovieGridItem } from '../../components/MovieGridItem';
 import { SearchInput } from '../../components/SearchInput';
 import { Book, searchBooksInLibrary } from '../../lib/books';
 import { Checkout, getActiveCheckoutsByItemIds } from '../../lib/checkouts';
+import { useAuth } from '../../lib/auth';
+import { useHousehold } from '../../lib/householdContext';
 import { searchMoviesInLibrary } from '../../lib/movies';
 import { MtgCard, searchMtgCollection, updateMtgCardQty } from '../../lib/mtgCards';
 import { listMtgDecks, MtgDeck } from '../../lib/mtgDecks';
+import { canDeleteOwned, isWriter } from '../../lib/roles';
 import { radius, spacing, useTheme } from '../../lib/theme';
 import { Movie } from '../../lib/types';
 
@@ -32,6 +35,9 @@ export default function LibraryScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const { household } = useHousehold();
+  const writer = household ? isWriter(household.role) : false;
   const [tab, setTab] = useState<LibraryTab>('movies');
   const [availability, setAvailability] = useState<AvailabilityFilter>('all');
   const [mtgMode, setMtgMode] = useState<MtgMode>('collection');
@@ -236,7 +242,7 @@ export default function LibraryScreen() {
             }
           />
         </View>
-        {tab !== 'mtg' ? (
+        {writer && tab !== 'mtg' ? (
           <Pressable
             onPress={() => router.push('/scan')}
             style={({ pressed }) => [
@@ -251,7 +257,7 @@ export default function LibraryScreen() {
             <Text style={{ color: colors.text, fontWeight: '700', fontSize: 12 }}>Scan</Text>
           </Pressable>
         ) : null}
-        {tab === 'movies' ? (
+        {writer && tab === 'movies' ? (
           <Pressable
             onPress={() => router.push('/add')}
             style={({ pressed }) => [
@@ -262,7 +268,7 @@ export default function LibraryScreen() {
             <Text style={[styles.addButtonText, { color: colors.accentText }]}>+</Text>
           </Pressable>
         ) : null}
-        {tab === 'books' ? (
+        {writer && tab === 'books' ? (
           <Pressable
             onPress={() => router.push('/add-book')}
             style={({ pressed }) => [
@@ -273,7 +279,7 @@ export default function LibraryScreen() {
             <Text style={[styles.addButtonText, { color: colors.accentText }]}>+</Text>
           </Pressable>
         ) : null}
-        {tab === 'mtg' && mtgMode === 'collection' ? (
+        {writer && tab === 'mtg' && mtgMode === 'collection' ? (
           <Pressable
             onPress={() => router.push('/mtg/add')}
             style={({ pressed }) => [
@@ -284,7 +290,7 @@ export default function LibraryScreen() {
             <Text style={[styles.addButtonText, { color: colors.accentText }]}>+</Text>
           </Pressable>
         ) : null}
-        {tab === 'mtg' && mtgMode === 'decks' ? (
+        {writer && tab === 'mtg' && mtgMode === 'decks' ? (
           <Pressable
             onPress={() => router.push('/mtg/import')}
             style={({ pressed }) => [
@@ -311,7 +317,11 @@ export default function LibraryScreen() {
         filteredMovies.length === 0 ? (
           <EmptyState
             title={query || availability !== 'all' ? 'No matches' : 'No movies yet'}
-            message="Scan a disc or tap + to search TMDb."
+            message={
+              writer
+                ? 'Scan a disc or tap + to search TMDb.'
+                : 'Movies added by your household will show up here.'
+            }
           />
         ) : (
           <FlatList
@@ -333,7 +343,11 @@ export default function LibraryScreen() {
         filteredBooks.length === 0 ? (
           <EmptyState
             title={query || availability !== 'all' ? 'No matches' : 'No books yet'}
-            message="Scan an ISBN or tap + to search Open Library."
+            message={
+              writer
+                ? 'Scan an ISBN or tap + to search Open Library.'
+                : 'Books added by your household will show up here.'
+            }
           />
         ) : (
           <FlatList
@@ -382,7 +396,11 @@ export default function LibraryScreen() {
         mtgCards.length === 0 ? (
           <EmptyState
             title={query ? 'No matches' : 'No cards yet'}
-            message="Tap + to search Scryfall and add cards to your collection."
+            message={
+              writer
+                ? 'Tap + to search Scryfall and add cards to your collection.'
+                : 'Cards added by your household will show up here.'
+            }
           />
         ) : (
           <FlatList
@@ -410,13 +428,17 @@ export default function LibraryScreen() {
                   </Text>
                 </View>
                 <View style={styles.qtyCol}>
-                  <Pressable onPress={() => adjustQty(item, 1)} hitSlop={8}>
-                    <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 18 }}>+</Text>
-                  </Pressable>
+                  {household && canDeleteOwned(household.role, item.addedBy, user?.id ?? null) ? (
+                    <Pressable onPress={() => adjustQty(item, 1)} hitSlop={8}>
+                      <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 18 }}>+</Text>
+                    </Pressable>
+                  ) : null}
                   <Text style={{ color: colors.text, fontWeight: '700' }}>{item.qty}</Text>
-                  <Pressable onPress={() => adjustQty(item, -1)} hitSlop={8}>
-                    <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 18 }}>−</Text>
-                  </Pressable>
+                  {household && canDeleteOwned(household.role, item.addedBy, user?.id ?? null) ? (
+                    <Pressable onPress={() => adjustQty(item, -1)} hitSlop={8}>
+                      <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 18 }}>−</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               </View>
             )}
@@ -425,7 +447,11 @@ export default function LibraryScreen() {
       ) : mtgDecks.length === 0 ? (
         <EmptyState
           title={query ? 'No matches' : 'No decks yet'}
-          message="Tap Import to pull a commander deck from Archidekt."
+            message={
+              writer
+                ? 'Tap Import to pull a commander deck from Archidekt.'
+                : 'Decks imported by your household will show up here.'
+            }
         />
       ) : (
         <FlatList

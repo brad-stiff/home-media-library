@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,10 +13,12 @@ import { AuthLink, AuthTextField } from '../../components/AuthForm';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useAuth } from '../../lib/auth';
 import { spacing, useTheme } from '../../lib/theme';
+import { useToast } from '../../lib/toast';
 
 export default function SignInScreen() {
   const router = useRouter();
   const { signIn } = useAuth();
+  const { showToast } = useToast();
   const { colors } = useTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,16 +26,17 @@ export default function SignInScreen() {
 
   const handleSignIn = async () => {
     if (!email.trim() || !password) {
-      Alert.alert('Missing fields', 'Enter your email and password.');
+      showToast('Enter your email and password.', 'error');
       return;
     }
 
     setLoading(true);
     try {
       await signIn(email, password);
+      showToast('Signed in');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not sign in.';
-      Alert.alert('Sign in failed', message);
+      showToast(message, 'error');
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,10 +13,12 @@ import { AuthLink, AuthTextField } from '../../components/AuthForm';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useAuth } from '../../lib/auth';
 import { spacing, useTheme } from '../../lib/theme';
+import { useToast } from '../../lib/toast';
 
 export default function SignUpScreen() {
   const router = useRouter();
   const { signUp } = useAuth();
+  const { showToast } = useToast();
   const { colors } = useTheme();
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
@@ -26,20 +27,21 @@ export default function SignUpScreen() {
 
   const handleSignUp = async () => {
     if (!email.trim() || !password) {
-      Alert.alert('Missing fields', 'Enter an email and password.');
+      showToast('Enter an email and password.', 'error');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Weak password', 'Use at least 6 characters.');
+      showToast('Use at least 6 characters.', 'error');
       return;
     }
 
     setLoading(true);
     try {
       await signUp(email, password, displayName);
+      showToast('Account created');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not create account.';
-      Alert.alert('Sign up failed', message);
+      showToast(message, 'error');
     } finally {
       setLoading(false);
     }
@@ -54,7 +56,7 @@ export default function SignUpScreen() {
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>Create account</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            We will create your household automatically so you can start adding movies.
+            After this you will create a household or join one with an invite code.
           </Text>
         </View>
 

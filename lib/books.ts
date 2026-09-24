@@ -1,5 +1,5 @@
 import { getMyHousehold } from './household';
-import { BookLookupResult } from './openLibrary';
+import { BookLookupResult, lookupBookByIsbn, lookupOpenLibraryKey } from './openLibrary';
 import { supabase } from './supabase';
 
 export type Book = {
@@ -110,12 +110,50 @@ export async function addBookFromLookup(lookup: BookLookupResult): Promise<Book>
   return rowToBook(data as BookRow);
 }
 
-export async function deleteBook(id: string): Promise<void> {
-  const { error } = await supabase.from('books').delete().eq('id', id);
+export async function refreshBookFromOpenLibrary(book: Book): Promise<Book> {
+  const lookup = book.isbn
+    ? await lookupBookByIsbn(book.isbn)
+    : book.openLibraryKey
+      ? await lookupOpenLibraryKey(book.openLibraryKey)
+      : null;
+
+  if (!lookup) {
+    throw new Error('Open Library has no metadata for this book.');
+  }
+
+  const { data, error } = await supabase
+    .from('books')
+    .update({
+      title: lookup.title,
+      authors: lookup.authors.length > 0 ? lookup.authors : book.authors,
+      year: lookup.year,
+      cover_url: lookup.coverUrl,
+      overview: lookup.overview,
+      open_library_key: lookup.openLibraryKey ?? book.openLibraryKey,
+    })
+    .eq('id', book.id)
+    .select('*')
+    .single();
+
   if (error) {
     if (error.code === '42501' || error.message.toLowerCase().includes('policy')) {
-      throw new Error('Only household admins can remove books.');
+      throw new Error('You cannot refresh this book.');
     }
     throw error;
+  }
+
+  return rowToBook(data as BookRow);
+}
+
+export async function deleteBook(id: string): Promise<void> {
+  const { data, error } = await supabase.from('books').delete().eq('id', id).select('id');
+  if (error) {
+    if (error.code === '42501' || error.message.toLowerCase().includes('policy')) {
+      throw new Error('You can only remove books you added. Admins can remove any book.');
+    }
+    throw error;
+  }
+  if (!data?.length) {
+    throw new Error('You can only remove books you added. Admins can remove any book.');
   }
 }
