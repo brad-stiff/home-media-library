@@ -18,6 +18,7 @@ export type MtgCard = {
   qty: number;
   foil: boolean;
   addedBy: string | null;
+  addedByName: string | null;
   addedAt: string;
 };
 
@@ -37,6 +38,7 @@ type MtgCardRow = {
   qty: number;
   foil: boolean;
   added_by: string | null;
+  added_by_name: string | null;
   created_at: string;
 };
 
@@ -57,6 +59,7 @@ function rowToCard(row: MtgCardRow): MtgCard {
     qty: row.qty,
     foil: row.foil,
     addedBy: row.added_by,
+    addedByName: row.added_by_name,
     addedAt: row.created_at,
   };
 }

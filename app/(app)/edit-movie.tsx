@@ -2,6 +2,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ApiCredit } from '../../components/ApiCredit';
+import { MediaGate } from '../../components/MediaGate';
 import { OwnershipPicker } from '../../components/OwnershipPicker';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { listHouseholdMembers } from '../../lib/household';
@@ -11,7 +13,7 @@ import { canEditHouseholdFacts } from '../../lib/roles';
 import { spacing, useTheme } from '../../lib/theme';
 import { Movie, MovieOwnership } from '../../lib/types';
 
-export default function EditMovieScreen() {
+function EditMovieScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors } = useTheme();
@@ -126,6 +128,7 @@ export default function EditMovieScreen() {
         loading={refreshing}
         disabled={saving}
       />
+      <ApiCredit providers={['tmdb']} />
     </ScrollView>
   );
 }
@@ -151,3 +154,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+export default function EditMovieRoute() {
+  return (
+    <MediaGate type="movies">
+      <EditMovieScreen />
+    </MediaGate>
+  );
+}

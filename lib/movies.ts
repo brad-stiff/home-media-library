@@ -21,6 +21,7 @@ function rowToMovie(row: MovieRow): Movie {
     hasDigital: row.has_digital,
     platform: row.platform,
     addedBy: row.added_by,
+    addedByName: row.added_by_name,
     addedAt: row.created_at,
     updatedAt: row.updated_at,
   };

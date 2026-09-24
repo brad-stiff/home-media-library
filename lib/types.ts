@@ -38,6 +38,7 @@ export interface Movie extends MovieOwnership {
   runtime: number | null;
   genres: string[];
   addedBy: string | null;
+  addedByName: string | null;
   addedAt: string;
   updatedAt: string;
 }
@@ -58,6 +59,7 @@ export type MovieRow = {
   has_digital: boolean;
   platform: string | null;
   added_by: string | null;
+  added_by_name: string | null;
   created_at: string;
   updated_at: string;
 };

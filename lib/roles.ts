@@ -47,8 +47,9 @@ export function canEditHouseholdFacts(
 export function attributionName(
   ownerId: string | null,
   members: { userId: string; displayName: string | null }[],
+  stampedName?: string | null,
 ): string | null {
-  if (!ownerId) return null;
+  if (!ownerId) return stampedName ? 'Deleted account' : null;
   const member = members.find((entry) => entry.userId === ownerId);
   if (!member) return 'Former member';
   return member.displayName?.trim() || 'Member';

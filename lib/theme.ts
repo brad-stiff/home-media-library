@@ -1,4 +1,7 @@
+import { useContext } from 'react';
 import { useColorScheme } from 'react-native';
+
+import { AppearanceContext } from './appearanceContext';
 
 export const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
@@ -66,7 +69,9 @@ export type ThemeColors = (typeof palette)['dark'];
 
 export function useTheme() {
   const scheme = useColorScheme();
-  const isDark = scheme !== 'light';
+  const preference = useContext(AppearanceContext);
+  const isDark =
+    preference === 'dark' || (preference !== 'light' && scheme !== 'light');
   return {
     colors: isDark ? palette.dark : palette.light,
     isDark,

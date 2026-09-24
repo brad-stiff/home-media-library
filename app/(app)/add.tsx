@@ -14,6 +14,8 @@ import {
   View,
 } from 'react-native';
 
+import { ApiCredit } from '../../components/ApiCredit';
+import { MediaGate } from '../../components/MediaGate';
 import { MoviePoster } from '../../components/MoviePoster';
 import { OwnershipPicker } from '../../components/OwnershipPicker';
 import { PrimaryButton } from '../../components/PrimaryButton';
@@ -127,6 +129,7 @@ function AddMovieScreen() {
               </Text>
             </Pressable>
           </View>
+          <ApiCredit providers={['tmdb']} />
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -168,6 +171,7 @@ function AddMovieScreen() {
               </Text>
             )
           }
+          ListFooterComponent={<ApiCredit providers={['tmdb']} />}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => setSelected(item)}
@@ -319,7 +323,9 @@ const styles = StyleSheet.create({
 export default function AddMovieRoute() {
   return (
     <WriterOnly>
-      <AddMovieScreen />
+      <MediaGate type="movies">
+        <AddMovieScreen />
+      </MediaGate>
     </WriterOnly>
   );
 }

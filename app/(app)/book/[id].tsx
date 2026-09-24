@@ -18,6 +18,7 @@ import { LoanHistory } from '../../../components/LoanHistory';
 import { Checkout, getActiveCheckout, listItemCheckouts } from '../../../lib/checkouts';
 import { listHouseholdMembers } from '../../../lib/household';
 import { useHousehold } from '../../../lib/householdContext';
+import { ApiCredit } from '../../../components/ApiCredit';
 import { attributionName, canDeleteOwned, canEditHouseholdFacts, isWriter } from '../../../lib/roles';
 import { spacing, useTheme } from '../../../lib/theme';
 
@@ -61,7 +62,9 @@ export default function BookDetailScreen() {
               result != null && canDeleteOwned(household.role, result.addedBy, user?.id ?? null),
             );
             setCanLend(isWriter(household.role));
-            setAddedByLabel(result ? attributionName(result.addedBy, members) : null);
+            setAddedByLabel(
+              result ? attributionName(result.addedBy, members, result.addedByName) : null,
+            );
             setActiveCheckout(checkout);
             setLoanHistory(history);
           }
@@ -189,8 +192,9 @@ export default function BookDetailScreen() {
             {canLend
               ? 'You can remove books you added. Admins can remove any book.'
               : 'Viewers can browse this book.'}
-          </Text>
+            </Text>
         )}
+        <ApiCredit providers={['openLibrary']} />
       </ScrollView>
     </>
   );

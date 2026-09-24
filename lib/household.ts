@@ -7,6 +7,9 @@ export type HouseholdMembership = {
   inviteCode: string | null;
   name: string;
   createdBy: string;
+  showMovies: boolean;
+  showBooks: boolean;
+  showMtg: boolean;
 };
 
 export type HouseholdMember = {
@@ -31,6 +34,11 @@ export type LibrarySummary = {
   isSoleAdmin: boolean;
 };
 
+function booleanFlag(row: object, key: string): boolean {
+  const value = (row as Record<string, unknown>)[key];
+  return typeof value === 'boolean' ? value : true;
+}
+
 export function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message;
   return fallback;
@@ -53,13 +61,22 @@ export async function fetchMyHousehold(): Promise<HouseholdMembership | null> {
   if (membershipError) throw membershipError;
   if (!membership) return null;
 
-  const { data: household, error: householdError } = await supabase
+  const withMedia = await supabase
     .from('households')
-    .select('id, name, created_by')
+    .select('id, name, created_by, show_movies, show_books, show_mtg')
     .eq('id', membership.household_id)
     .single();
 
-  if (householdError) throw householdError;
+  const householdResult = withMedia.error
+    ? await supabase
+        .from('households')
+        .select('id, name, created_by')
+        .eq('id', membership.household_id)
+        .single()
+    : withMedia;
+
+  const household = householdResult.data;
+  if (householdResult.error || !household) throw householdResult.error;
 
   let inviteCode: string | null = null;
   if (membership.role === 'admin') {
@@ -74,7 +91,23 @@ export async function fetchMyHousehold(): Promise<HouseholdMembership | null> {
     inviteCode,
     name: household.name,
     createdBy: household.created_by,
+    showMovies: booleanFlag(household, 'show_movies'),
+    showBooks: booleanFlag(household, 'show_books'),
+    showMtg: booleanFlag(household, 'show_mtg'),
   };
+}
+
+export async function setHouseholdMedia(shows: {
+  movies: boolean;
+  books: boolean;
+  mtg: boolean;
+}): Promise<void> {
+  const { error } = await supabase.rpc('set_household_media', {
+    p_show_movies: shows.movies,
+    p_show_books: shows.books,
+    p_show_mtg: shows.mtg,
+  });
+  if (error) throw error;
 }
 
 export async function getMyHousehold(): Promise<HouseholdMembership> {

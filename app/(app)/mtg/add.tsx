@@ -12,6 +12,8 @@ import {
   View,
 } from 'react-native';
 
+import { ApiCredit } from '../../../components/ApiCredit';
+import { MediaGate } from '../../../components/MediaGate';
 import { SearchInput } from '../../../components/SearchInput';
 import { WriterOnly } from '../../../components/WriterOnly';
 import { addMtgCardFromScryfall } from '../../../lib/mtgCards';
@@ -90,6 +92,7 @@ function AddMtgCardScreen() {
               {query.trim() ? 'No cards found.' : 'Search by card name (Scryfall).'}
             </Text>
           }
+          ListFooterComponent={<ApiCredit providers={['scryfall']} />}
           renderItem={({ item }) => {
             const image = scryfallImageUri(item, 'small');
             return (
@@ -184,7 +187,9 @@ const styles = StyleSheet.create({
 export default function AddMtgCardRoute() {
   return (
     <WriterOnly>
-      <AddMtgCardScreen />
+      <MediaGate type="mtg">
+        <AddMtgCardScreen />
+      </MediaGate>
     </WriterOnly>
   );
 }

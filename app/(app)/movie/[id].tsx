@@ -18,6 +18,7 @@ import { Checkout, getActiveCheckout, listItemCheckouts } from '../../../lib/che
 import { listHouseholdMembers } from '../../../lib/household';
 import { useHousehold } from '../../../lib/householdContext';
 import { deleteMovie, getMovieById } from '../../../lib/movies';
+import { ApiCredit } from '../../../components/ApiCredit';
 import { attributionName, canDeleteOwned, canEditHouseholdFacts, isWriter } from '../../../lib/roles';
 import { backdropUrl, formatRuntime, radius, spacing, useTheme } from '../../../lib/theme';
 import { formatOwnershipLabel, Movie } from '../../../lib/types';
@@ -62,7 +63,9 @@ export default function MovieDetailScreen() {
               result != null && canDeleteOwned(household.role, result.addedBy, user?.id ?? null),
             );
             setCanLend(isWriter(household.role));
-            setAddedByLabel(result ? attributionName(result.addedBy, members) : null);
+            setAddedByLabel(
+              result ? attributionName(result.addedBy, members, result.addedByName) : null,
+            );
             setActiveCheckout(checkout);
             setLoanHistory(history);
           }
@@ -236,6 +239,7 @@ export default function MovieDetailScreen() {
                 : 'Viewers can browse this movie.'}
             </Text>
           )}
+          <ApiCredit providers={['tmdb']} />
         </View>
       </ScrollView>
     </>

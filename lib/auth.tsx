@@ -18,6 +18,9 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName?: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updatePassword: (password: string) => Promise<void>;
+  updateEmail: (email: string) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -77,6 +80,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (error) throw error;
   }, []);
 
+  const updatePassword = useCallback(async (password: string) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+  }, []);
+
+  const updateEmail = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.updateUser({ email: email.trim() });
+    if (error) throw error;
+  }, []);
+
+  const deleteAccount = useCallback(async () => {
+    const { error } = await supabase.rpc('delete_own_account');
+    if (error) throw error;
+    await supabase.auth.signOut({ scope: 'local' });
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
@@ -85,8 +104,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       signIn,
       signUp,
       signOut,
+      updatePassword,
+      updateEmail,
+      deleteAccount,
     }),
-    [session, isReady, signIn, signUp, signOut],
+    [session, isReady, signIn, signUp, signOut, updatePassword, updateEmail, deleteAccount],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

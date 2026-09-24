@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ApiCredit } from '../../components/ApiCredit';
 import { EmptyState } from '../../components/EmptyState';
 import { MovieGridItem } from '../../components/MovieGridItem';
 import { SearchInput } from '../../components/SearchInput';
@@ -22,6 +23,7 @@ import { useHousehold } from '../../lib/householdContext';
 import { searchMoviesInLibrary } from '../../lib/movies';
 import { MtgCard, searchMtgCollection, updateMtgCardQty } from '../../lib/mtgCards';
 import { listMtgDecks, MtgDeck } from '../../lib/mtgDecks';
+import { isTypeVisible, useProfile } from '../../lib/profile';
 import { canDeleteOwned, isWriter } from '../../lib/roles';
 import { radius, spacing, useTheme } from '../../lib/theme';
 import { Movie } from '../../lib/types';
@@ -37,6 +39,7 @@ export default function LibraryScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { household } = useHousehold();
+  const { profile, loading: profileLoading } = useProfile();
   const writer = household ? isWriter(household.role) : false;
   const [tab, setTab] = useState<LibraryTab>('movies');
   const [availability, setAvailability] = useState<AvailabilityFilter>('all');
@@ -48,6 +51,23 @@ export default function LibraryScreen() {
   const [checkouts, setCheckouts] = useState<Map<string, Checkout>>(new Map());
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+
+  const visibleTabs = useMemo(() => {
+    const all = [
+      ['movies', 'Movies'],
+      ['books', 'Books'],
+      ['mtg', 'MTG'],
+    ] as const;
+    if (!household) return [...all];
+    return all.filter(([id]) => isTypeVisible(household, profile, id));
+  }, [household, profile]);
+
+  useEffect(() => {
+    if (visibleTabs.length === 0) return;
+    if (!visibleTabs.some(([id]) => id === tab)) {
+      setTab(visibleTabs[0][0]);
+    }
+  }, [visibleTabs, tab]);
 
   const load = useCallback(
     async (searchQuery: string, activeTab: LibraryTab, mode: MtgMode) => {
@@ -84,8 +104,10 @@ export default function LibraryScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (profileLoading || !household) return;
+      if (!isTypeVisible(household, profile, tab)) return;
       load(query, tab, mtgMode);
-    }, [load, query, tab, mtgMode]),
+    }, [load, query, tab, mtgMode, profileLoading, household, profile]),
   );
 
   useLayoutEffect(() => {
@@ -96,9 +118,14 @@ export default function LibraryScreen() {
         </Pressable>
       ),
       headerRight: () => (
-        <Pressable onPress={() => router.push('/loans')} hitSlop={8}>
-          <Text style={{ color: colors.accent, fontWeight: '600' }}>Loans</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: spacing.md }}>
+          <Pressable onPress={() => router.push('/loans')} hitSlop={8}>
+            <Text style={{ color: colors.accent, fontWeight: '600' }}>Loans</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push('/settings')} hitSlop={8}>
+            <Text style={{ color: colors.accent, fontWeight: '600' }}>Settings</Text>
+          </Pressable>
+        </View>
       ),
     });
   }, [navigation, router, colors.accent]);
@@ -133,14 +160,36 @@ export default function LibraryScreen() {
     })();
   };
 
+  if (profileLoading) {
+    return (
+      <View style={[styles.container, styles.centered, { paddingBottom: insets.bottom }]}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
+
+  if (household && visibleTabs.length === 0) {
+    return (
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
+        <EmptyState
+          title="Nothing to show"
+          message={
+            household.role === 'admin'
+              ? 'Turn a library type back on in Settings. Hiding a type keeps the catalog.'
+              : 'Every library type is hidden. Open Settings to show one again, or ask an admin if the household turned them off.'
+          }
+        />
+      </View>
+    );
+  }
+
+  const creditProviders =
+    tab === 'movies' ? (['tmdb'] as const) : tab === 'books' ? (['openLibrary'] as const) : mtgMode === 'decks' ? (['scryfall', 'archidekt'] as const) : (['scryfall'] as const);
+
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.tabs}>
-        {([
-          ['movies', 'Movies'],
-          ['books', 'Books'],
-          ['mtg', 'MTG'],
-        ] as const).map(([value, label]) => {
+        {visibleTabs.map(([value, label]) => {
           const active = tab === value;
           return (
             <Pressable
@@ -314,6 +363,8 @@ export default function LibraryScreen() {
         ) : null}
       </View>
 
+      <ApiCredit providers={[...creditProviders]} />
+
       {loading ? (
         <View style={styles.centered}>
           <ActivityIndicator color={colors.accent} />
@@ -427,7 +478,12 @@ export default function LibraryScreen() {
                     {item.foil ? ' ★' : ''}
                   </Text>
                   <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={1}>
-                    {[item.setCode?.toUpperCase(), item.collectorNumber, item.typeLine]
+                    {[
+                      item.setCode?.toUpperCase(),
+                      item.collectorNumber,
+                      item.typeLine,
+                      !item.addedBy && item.addedByName ? 'Deleted account' : null,
+                    ]
                       .filter(Boolean)
                       .join(' · ')}
                   </Text>

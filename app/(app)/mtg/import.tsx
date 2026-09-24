@@ -10,6 +10,8 @@ import {
   View,
 } from 'react-native';
 
+import { ApiCredit } from '../../../components/ApiCredit';
+import { MediaGate } from '../../../components/MediaGate';
 import { AuthTextField } from '../../../components/AuthForm';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { WriterOnly } from '../../../components/WriterOnly';
@@ -94,6 +96,7 @@ function ImportMtgDeckScreen() {
           />
           <PrimaryButton label="Create deck" onPress={handleCreateBlank} loading={creating} />
         </View>
+        <ApiCredit providers={['archidekt', 'scryfall']} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -121,7 +124,9 @@ const styles = StyleSheet.create({
 export default function ImportMtgDeckRoute() {
   return (
     <WriterOnly>
-      <ImportMtgDeckScreen />
+      <MediaGate type="mtg">
+        <ImportMtgDeckScreen />
+      </MediaGate>
     </WriterOnly>
   );
 }

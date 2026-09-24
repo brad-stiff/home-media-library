@@ -11,10 +11,11 @@ import {
   View,
 } from 'react-native';
 
+import { ApiCredit } from '../../../../components/ApiCredit';
 import { PrimaryButton } from '../../../../components/PrimaryButton';
 import { useAuth } from '../../../../lib/auth';
-import { getMyHousehold } from '../../../../lib/household';
-import { canDeleteOwned } from '../../../../lib/roles';
+import { getMyHousehold, listHouseholdMembers } from '../../../../lib/household';
+import { attributionName, canDeleteOwned } from '../../../../lib/roles';
 import {
   deleteMtgDeck,
   getMtgDeck,
@@ -33,20 +34,23 @@ export default function MtgDeckDetailScreen() {
   const [cards, setCards] = useState<MtgDeckCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [canDelete, setCanDelete] = useState(false);
+  const [createdByLabel, setCreatedByLabel] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     try {
-      const [d, c, household] = await Promise.all([
+      const [d, c, household, members] = await Promise.all([
         getMtgDeck(id),
         getMtgDeckCards(id),
         getMyHousehold(),
+        listHouseholdMembers(),
       ]);
       setDeck(d);
       setCards(c);
       setCanDelete(d != null && canDeleteOwned(household.role, d.createdBy, user?.id ?? null));
+      setCreatedByLabel(d ? attributionName(d.createdBy, members, d.createdByName) : null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not load deck.';
       Alert.alert('Error', message);
@@ -118,6 +122,7 @@ export default function MtgDeckDetailScreen() {
             <Text style={[styles.meta, { color: colors.textSecondary }]}>
               {totalCards} cards
               {deck.archidektId ? ` · Archidekt ${deck.archidektId}` : ''}
+              {createdByLabel ? ` · ${createdByLabel}` : ''}
             </Text>
             {commanders.length > 0 ? (
               <Text style={[styles.meta, { color: colors.text }]}>
@@ -132,6 +137,7 @@ export default function MtgDeckDetailScreen() {
                 variant="danger"
               />
             ) : null}
+            <ApiCredit providers={deck.archidektId ? ['archidekt', 'scryfall'] : ['scryfall']} />
           </View>
         }
         renderItem={({ item }) => (

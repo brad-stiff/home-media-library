@@ -1,16 +1,16 @@
 import { Stack } from 'expo-router';
-import { ActivityIndicator, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider, useAuth } from '../lib/auth';
+import { ProfileProvider } from '../lib/profile';
 import { useTheme } from '../lib/theme';
 import { ToastProvider } from '../lib/toast';
 
 function RootNavigator() {
   const { session, isReady } = useAuth();
-  const { colors } = useTheme();
-  const scheme = useColorScheme();
+  const { colors, isDark } = useTheme();
 
   if (!isReady) {
     return (
@@ -22,7 +22,7 @@ function RootNavigator() {
 
   return (
     <>
-      <StatusBar style={scheme === 'light' ? 'dark' : 'light'} />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: colors.background },
@@ -43,16 +43,26 @@ function RootNavigator() {
   );
 }
 
-export default function RootLayout() {
+function ThemedApp() {
   const { colors } = useTheme();
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
-      <ToastProvider>
-        <AuthProvider>
-          <RootNavigator />
-        </AuthProvider>
-      </ToastProvider>
+    <ToastProvider>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <RootNavigator />
+      </View>
+    </ToastProvider>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <ProfileProvider>
+          <ThemedApp />
+        </ProfileProvider>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }

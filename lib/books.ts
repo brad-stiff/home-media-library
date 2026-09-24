@@ -13,6 +13,7 @@ export type Book = {
   overview: string | null;
   openLibraryKey: string | null;
   addedBy: string | null;
+  addedByName: string | null;
   addedAt: string;
   updatedAt: string;
 };
@@ -28,6 +29,7 @@ type BookRow = {
   overview: string | null;
   open_library_key: string | null;
   added_by: string | null;
+  added_by_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -44,6 +46,7 @@ function rowToBook(row: BookRow): Book {
     overview: row.overview,
     openLibraryKey: row.open_library_key,
     addedBy: row.added_by,
+    addedByName: row.added_by_name,
     addedAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -13,6 +13,8 @@ import {
   View,
 } from 'react-native';
 
+import { ApiCredit } from '../../../components/ApiCredit';
+import { MediaGate } from '../../../components/MediaGate';
 import { MoviePoster } from '../../../components/MoviePoster';
 import { OwnershipPicker } from '../../../components/OwnershipPicker';
 import { PrimaryButton } from '../../../components/PrimaryButton';
@@ -114,6 +116,7 @@ function ConfirmMovieFromScanScreen() {
           <Pressable onPress={() => router.replace('/scan')} style={styles.link}>
             <Text style={{ color: colors.accent, fontWeight: '600' }}>Scan again</Text>
           </Pressable>
+          <ApiCredit providers={['tmdb']} />
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -129,6 +132,7 @@ function ConfirmMovieFromScanScreen() {
         data={movies}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={styles.list}
+        ListFooterComponent={<ApiCredit providers={['tmdb']} />}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => setSelected(item)}
@@ -213,7 +217,9 @@ const styles = StyleSheet.create({
 export default function ConfirmMovieRoute() {
   return (
     <WriterOnly>
-      <ConfirmMovieFromScanScreen />
+      <MediaGate type="movies">
+        <ConfirmMovieFromScanScreen />
+      </MediaGate>
     </WriterOnly>
   );
 }

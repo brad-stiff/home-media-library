@@ -9,6 +9,7 @@ export type MtgDeck = {
   description: string | null;
   archidektId: string | null;
   createdBy: string | null;
+  createdByName: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -34,6 +35,7 @@ type DeckRow = {
   description: string | null;
   archidekt_id: string | null;
   created_by: string | null;
+  created_by_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -60,6 +62,7 @@ function rowToDeck(row: DeckRow): MtgDeck {
     description: row.description,
     archidektId: row.archidekt_id,
     createdBy: row.created_by,
+    createdByName: row.created_by_name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

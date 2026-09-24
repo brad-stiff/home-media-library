@@ -8,6 +8,10 @@
 create table public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   display_name text,
+  appearance text not null default 'system' check (appearance in ('system', 'light', 'dark')),
+  hide_movies boolean not null default false,
+  hide_books boolean not null default false,
+  hide_mtg boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -16,6 +20,9 @@ create table public.households (
   name text not null default 'My Household',
   invite_code text not null unique,
   created_by uuid not null references auth.users (id) on delete restrict,
+  show_movies boolean not null default true,
+  show_books boolean not null default true,
+  show_mtg boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -45,6 +52,7 @@ create table public.movies (
   has_digital boolean not null default false,
   platform text,
   added_by uuid references auth.users (id) on delete set null,
+  added_by_name text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (household_id, tmdb_id),
@@ -398,6 +406,7 @@ create table if not exists public.books (
   overview text,
   open_library_key text,
   added_by uuid references auth.users (id) on delete set null,
+  added_by_name text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (household_id, isbn)
@@ -601,6 +610,7 @@ create table if not exists public.mtg_cards (
   qty integer not null default 1 check (qty > 0),
   foil boolean not null default false,
   added_by uuid references auth.users (id) on delete set null,
+  added_by_name text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (household_id, scryfall_id, foil)
@@ -616,6 +626,7 @@ create table if not exists public.mtg_decks (
   description text,
   archidekt_id text,
   created_by uuid references auth.users (id) on delete set null,
+  created_by_name text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1903,3 +1914,175 @@ $$;
 
 grant execute on function public.cancel_checkout(uuid) to authenticated;
 grant execute on function public.update_checkout_borrower(uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Phase 8 — profile, appearance, media visibility, account delete
+-- Safe to run on a database that already has Phases 1–7.
+-- ---------------------------------------------------------------------------
+
+alter table public.profiles
+  add column if not exists appearance text not null default 'system';
+
+alter table public.profiles
+  add column if not exists hide_movies boolean not null default false;
+
+alter table public.profiles
+  add column if not exists hide_books boolean not null default false;
+
+alter table public.profiles
+  add column if not exists hide_mtg boolean not null default false;
+
+alter table public.profiles drop constraint if exists profiles_appearance_check;
+alter table public.profiles
+  add constraint profiles_appearance_check
+  check (appearance in ('system', 'light', 'dark'));
+
+alter table public.households
+  add column if not exists show_movies boolean not null default true;
+
+alter table public.households
+  add column if not exists show_books boolean not null default true;
+
+alter table public.households
+  add column if not exists show_mtg boolean not null default true;
+
+alter table public.movies
+  add column if not exists added_by_name text;
+
+alter table public.books
+  add column if not exists added_by_name text;
+
+alter table public.mtg_cards
+  add column if not exists added_by_name text;
+
+alter table public.mtg_decks
+  add column if not exists created_by_name text;
+
+-- Ownership ids stay fixed while the account exists. Account delete sets them
+-- null and is the only writer of the stamped display name.
+create or replace function public.protect_row_ownership()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.household_id is distinct from old.household_id then
+    raise exception 'household_id cannot be changed';
+  end if;
+
+  if tg_table_name = 'mtg_decks' then
+    if new.created_by is distinct from old.created_by then
+      if new.created_by is not null
+        or exists (select 1 from auth.users where id = old.created_by) then
+        raise exception 'created_by cannot be changed';
+      end if;
+    end if;
+    if new.created_by_name is distinct from old.created_by_name
+      and current_setting('app.stamp_owner_name', true) is distinct from '1' then
+      raise exception 'created_by_name cannot be changed';
+    end if;
+  elsif tg_table_name in ('movies', 'books', 'mtg_cards') then
+    if new.added_by is distinct from old.added_by then
+      if new.added_by is not null
+        or exists (select 1 from auth.users where id = old.added_by) then
+        raise exception 'added_by cannot be changed';
+      end if;
+    end if;
+    if new.added_by_name is distinct from old.added_by_name
+      and current_setting('app.stamp_owner_name', true) is distinct from '1' then
+      raise exception 'added_by_name cannot be changed';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function public.set_household_media(
+  p_show_movies boolean,
+  p_show_books boolean,
+  p_show_mtg boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_admin(hid) then
+    raise exception 'Only admins can change which media types the household uses';
+  end if;
+
+  update public.households
+  set
+    show_movies = p_show_movies,
+    show_books = p_show_books,
+    show_mtg = p_show_mtg
+  where id = hid;
+end;
+$$;
+
+create or replace function public.delete_own_account()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  stamped text;
+begin
+  if uid is null then
+    raise exception 'Not authenticated';
+  end if;
+
+  if exists (select 1 from public.household_members where user_id = uid) then
+    raise exception 'Leave your household before deleting your account';
+  end if;
+
+  if exists (select 1 from public.households where created_by = uid) then
+    raise exception 'Leave your household before deleting your account';
+  end if;
+
+  select coalesce(nullif(trim(display_name), ''), 'Deleted account')
+  into stamped
+  from public.profiles
+  where id = uid;
+
+  stamped := coalesce(stamped, 'Deleted account');
+
+  perform set_config('app.stamp_owner_name', '1', true);
+
+  update public.movies
+  set added_by_name = stamped
+  where added_by = uid;
+
+  update public.books
+  set added_by_name = stamped
+  where added_by = uid;
+
+  update public.mtg_cards
+  set added_by_name = stamped
+  where added_by = uid;
+
+  update public.mtg_decks
+  set created_by_name = stamped
+  where created_by = uid;
+
+  delete from auth.users where id = uid;
+end;
+$$;
+
+revoke all on function public.set_household_media(boolean, boolean, boolean) from public, anon;
+revoke all on function public.delete_own_account() from public, anon;
+grant execute on function public.set_household_media(boolean, boolean, boolean) to authenticated;
+grant execute on function public.delete_own_account() to authenticated;

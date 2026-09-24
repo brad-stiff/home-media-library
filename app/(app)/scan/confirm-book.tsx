@@ -3,6 +3,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ApiCredit } from '../../../components/ApiCredit';
+import { MediaGate } from '../../../components/MediaGate';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { WriterOnly } from '../../../components/WriterOnly';
 import { addBookFromLookup } from '../../../lib/books';
@@ -67,6 +69,7 @@ function ConfirmBookScreen() {
       ) : null}
       <PrimaryButton label="Add to library" onPress={handleSave} loading={saving} />
       <PrimaryButton label="Scan again" onPress={() => router.replace('/scan')} />
+      <ApiCredit providers={['openLibrary']} />
     </ScrollView>
   );
 }
@@ -105,7 +108,9 @@ const styles = StyleSheet.create({
 export default function ConfirmBookRoute() {
   return (
     <WriterOnly>
-      <ConfirmBookScreen />
+      <MediaGate type="books">
+        <ConfirmBookScreen />
+      </MediaGate>
     </WriterOnly>
   );
 }

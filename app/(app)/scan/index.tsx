@@ -12,16 +12,23 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ApiCredit } from '../../../components/ApiCredit';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { WriterOnly } from '../../../components/WriterOnly';
 import { isIsbn, normalizeBarcode } from '../../../lib/barcode';
 import { resolveBarcode } from '../../../lib/barcodeResolve';
+import { useHousehold } from '../../../lib/householdContext';
+import { isTypeVisible, useProfile } from '../../../lib/profile';
 import { radius, spacing, useTheme } from '../../../lib/theme';
 
 function ScanScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { household } = useHousehold();
+  const { profile } = useProfile();
+  const moviesOn = household ? isTypeVisible(household, profile, 'movies') : false;
+  const booksOn = household ? isTypeVisible(household, profile, 'books') : false;
   const [permission, requestPermission] = useCameraPermissions();
   const [manualCode, setManualCode] = useState('');
   const [resolving, setResolving] = useState(false);
@@ -38,6 +45,11 @@ function ScanScreen() {
         const result = await resolveBarcode(code);
 
         if (result.kind === 'book') {
+          if (!booksOn) {
+            Alert.alert('Books are hidden', 'Turn Books on in Settings before adding this scan.');
+            lockedRef.current = false;
+            return;
+          }
           router.replace({
             pathname: '/scan/confirm-book',
             params: { payload: JSON.stringify(result.book) },
@@ -46,6 +58,11 @@ function ScanScreen() {
         }
 
         if (result.kind === 'movie_candidates') {
+          if (!moviesOn) {
+            Alert.alert('Movies are hidden', 'Turn Movies on in Settings before adding this scan.');
+            lockedRef.current = false;
+            return;
+          }
           router.replace({
             pathname: '/scan/confirm-movie',
             params: {
@@ -59,15 +76,20 @@ function ScanScreen() {
         }
 
         const searchBooks = isIsbn(result.barcode);
+        const canSearch = searchBooks ? booksOn : moviesOn;
         Alert.alert('No match', result.reason, [
-          {
-            text: searchBooks ? 'Search books' : 'Search movies',
-            onPress: () =>
-              router.replace({
-                pathname: searchBooks ? '/add-book' : '/add',
-                params: result.suggestedQuery ? { q: result.suggestedQuery } : undefined,
-              }),
-          },
+          ...(canSearch
+            ? [
+                {
+                  text: searchBooks ? 'Search books' : 'Search movies',
+                  onPress: () =>
+                    router.replace({
+                      pathname: searchBooks ? '/add-book' : '/add',
+                      params: result.suggestedQuery ? { q: result.suggestedQuery } : undefined,
+                    }),
+                },
+              ]
+            : []),
           {
             text: 'Scan again',
             style: 'cancel',
@@ -90,7 +112,7 @@ function ScanScreen() {
         setResolving(false);
       }
     },
-    [resolving, router],
+    [booksOn, moviesOn, resolving, router],
   );
 
   const onBarcodeScanned = (scan: BarcodeScanningResult) => {
@@ -180,12 +202,17 @@ function ScanScreen() {
                 <Text style={{ color: colors.accentText, fontWeight: '700' }}>Go</Text>
               </Pressable>
             </View>
-            <Pressable onPress={() => router.push('/add')} style={styles.secondary}>
-              <Text style={{ color: colors.accent, fontWeight: '600' }}>Search movies (TMDb)</Text>
-            </Pressable>
-            <Pressable onPress={() => router.push('/add-book')} style={styles.secondary}>
-              <Text style={{ color: colors.accent, fontWeight: '600' }}>Search books (Open Library)</Text>
-            </Pressable>
+            {moviesOn ? (
+              <Pressable onPress={() => router.push('/add')} style={styles.secondary}>
+                <Text style={{ color: colors.accent, fontWeight: '600' }}>Search movies (TMDb)</Text>
+              </Pressable>
+            ) : null}
+            {booksOn ? (
+              <Pressable onPress={() => router.push('/add-book')} style={styles.secondary}>
+                <Text style={{ color: colors.accent, fontWeight: '600' }}>Search books (Open Library)</Text>
+              </Pressable>
+            ) : null}
+            <ApiCredit providers={[...(moviesOn ? (['tmdb'] as const) : []), ...(booksOn ? (['openLibrary'] as const) : [])]} />
           </>
         )}
       </View>

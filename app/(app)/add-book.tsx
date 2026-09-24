@@ -14,6 +14,8 @@ import {
   View,
 } from 'react-native';
 
+import { ApiCredit } from '../../components/ApiCredit';
+import { MediaGate } from '../../components/MediaGate';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { WriterOnly } from '../../components/WriterOnly';
 import { SearchInput } from '../../components/SearchInput';
@@ -119,6 +121,7 @@ function AddBookScreen() {
               </Text>
             </Pressable>
           </View>
+          <ApiCredit providers={['openLibrary']} />
         </ScrollView>
       </KeyboardAvoidingView>
     );
@@ -160,6 +163,7 @@ function AddBookScreen() {
               </Text>
             )
           }
+          ListFooterComponent={<ApiCredit providers={['openLibrary']} />}
           renderItem={({ item }) => (
             <Pressable
               onPress={() => setSelected(item)}
@@ -308,7 +312,9 @@ const styles = StyleSheet.create({
 export default function AddBookRoute() {
   return (
     <WriterOnly>
-      <AddBookScreen />
+      <MediaGate type="books">
+        <AddBookScreen />
+      </MediaGate>
     </WriterOnly>
   );
 }
