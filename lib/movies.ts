@@ -1,4 +1,4 @@
-import { extractYear } from './theme';
+import { extractYear } from './mediaFormat';
 import { getMovieDetails } from './tmdb';
 import { getMyHousehold } from './household';
 import { supabase } from './supabase';

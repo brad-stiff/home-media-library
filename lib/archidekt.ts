@@ -33,7 +33,7 @@ type ArchidektDeckCard = {
   };
 };
 
-function extractArchidektId(input: string): string | null {
+export function extractArchidektId(input: string): string | null {
   const trimmed = input.trim();
   const urlMatch = trimmed.match(/archidekt\.com\/decks\/(\d+)/i);
   if (urlMatch) return urlMatch[1];

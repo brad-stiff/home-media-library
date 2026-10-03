@@ -1,9 +1,9 @@
 import { getMyHousehold } from './household';
 import { supabase } from './supabase';
 
-export type CheckoutItemType = 'movie' | 'book';
+export { checkoutStatus, type CheckoutStatus } from './checkoutStatus';
 
-export type CheckoutStatus = 'active' | 'returned' | 'cancelled';
+export type CheckoutItemType = 'movie' | 'book';
 
 export type Checkout = {
   id: string;
@@ -34,12 +34,6 @@ type CheckoutRow = {
   checked_out_by: string | null;
   notes: string | null;
 };
-
-export function checkoutStatus(checkout: Pick<Checkout, 'returnedAt' | 'cancelledAt'>): CheckoutStatus {
-  if (checkout.cancelledAt) return 'cancelled';
-  if (checkout.returnedAt) return 'returned';
-  return 'active';
-}
 
 function rowToCheckout(row: CheckoutRow): Checkout {
   return {

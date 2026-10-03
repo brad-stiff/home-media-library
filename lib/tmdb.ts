@@ -1,5 +1,5 @@
 import { TmdbMovieDetails, TmdbMovieSearchResult } from './types';
-import { extractYear } from './theme';
+import { extractYear } from './mediaFormat';
 
 const API_KEY = process.env.EXPO_PUBLIC_TMDB_API_KEY;
 const BASE_URL = 'https://api.themoviedb.org/3';

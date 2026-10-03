@@ -12,7 +12,7 @@ import {
 import { AuthTextField } from '../../../components/AuthForm';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { useHousehold } from '../../../lib/householdContext';
-import { errorMessage, joinHousehold } from '../../../lib/household';
+import { errorMessage, isInviteCodeReady, joinHousehold, normalizeInviteCode } from '../../../lib/household';
 import { spacing, useTheme } from '../../../lib/theme';
 
 export default function JoinHouseholdScreen() {
@@ -24,7 +24,7 @@ export default function JoinHouseholdScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const handleJoin = async () => {
-    const normalized = code.trim().toUpperCase();
+    const normalized = normalizeInviteCode(code);
     if (household) {
       router.push({
         pathname: '/household/confirm-departure',
@@ -74,7 +74,7 @@ export default function JoinHouseholdScreen() {
           label={household ? 'Continue' : 'Join'}
           onPress={handleJoin}
           loading={loading}
-          disabled={code.trim().length < 4}
+          disabled={!isInviteCodeReady(code)}
         />
         {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
       </ScrollView>
