@@ -10,6 +10,7 @@ export type Checkout = {
   householdId: string;
   itemType: CheckoutItemType;
   itemId: string;
+  contactId: string | null;
   borrowerName: string;
   checkedOutAt: string;
   returnedAt: string | null;
@@ -27,6 +28,7 @@ type CheckoutRow = {
   household_id: string;
   item_type: CheckoutItemType;
   item_id: string;
+  contact_id: string | null;
   borrower_name: string;
   checked_out_at: string;
   returned_at: string | null;
@@ -41,6 +43,7 @@ function rowToCheckout(row: CheckoutRow): Checkout {
     householdId: row.household_id,
     itemType: row.item_type,
     itemId: row.item_id,
+    contactId: row.contact_id,
     borrowerName: row.borrower_name,
     checkedOutAt: row.checked_out_at,
     returnedAt: row.returned_at,
@@ -93,13 +96,13 @@ export async function getActiveCheckoutsByItemIds(
 export async function checkoutItem(
   itemType: CheckoutItemType,
   itemId: string,
-  borrowerName: string,
+  contactId: string,
   notes?: string,
 ): Promise<Checkout> {
   const { data, error } = await supabase.rpc('checkout_item', {
     p_item_type: itemType,
     p_item_id: itemId,
-    p_borrower_name: borrowerName.trim(),
+    p_contact_id: contactId,
     p_notes: notes?.trim() || null,
   });
 
@@ -125,10 +128,10 @@ export async function cancelCheckout(checkoutId: string): Promise<Checkout> {
   return rowToCheckout(data as CheckoutRow);
 }
 
-export async function updateCheckoutBorrower(checkoutId: string, borrowerName: string): Promise<Checkout> {
+export async function updateCheckoutBorrower(checkoutId: string, contactId: string): Promise<Checkout> {
   const { data, error } = await supabase.rpc('update_checkout_borrower', {
     p_checkout_id: checkoutId,
-    p_borrower_name: borrowerName.trim(),
+    p_contact_id: contactId,
   });
 
   if (error) throw error;

@@ -1,13 +1,8 @@
-import { useEffect, useState } from 'react';
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { PrimaryButton } from './PrimaryButton';
+import { Contact, listContacts } from '../lib/contacts';
 import {
   Checkout,
   CheckoutItemType,
@@ -16,7 +11,9 @@ import {
   returnCheckout,
   updateCheckoutBorrower,
 } from '../lib/checkouts';
+import { errorMessage } from '../lib/household';
 import { radius, spacing, useTheme } from '../lib/theme';
+import { PrimaryButton } from './PrimaryButton';
 
 type CheckoutPanelProps = {
   itemType: CheckoutItemType;
@@ -26,6 +23,8 @@ type CheckoutPanelProps = {
   canWrite: boolean;
   /** Movies need Blu-ray or 4K. Books are always lendable. */
   allowCheckout?: boolean;
+  /** Household admin can hide checkout. Return and cancel stay available. */
+  lendingEnabled?: boolean;
 };
 
 export function CheckoutPanel({
@@ -35,30 +34,48 @@ export function CheckoutPanel({
   onChanged,
   canWrite,
   allowCheckout = true,
+  lendingEnabled = true,
 }: CheckoutPanelProps) {
+  const router = useRouter();
   const { colors } = useTheme();
-  const [borrower, setBorrower] = useState('');
-  const [borrowerDraft, setBorrowerDraft] = useState('');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contactId, setContactId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setBorrowerDraft(activeCheckout?.borrowerName ?? '');
-  }, [activeCheckout?.id, activeCheckout?.borrowerName]);
+    setContactId(activeCheckout?.contactId ?? null);
+  }, [activeCheckout?.id, activeCheckout?.contactId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!lendingEnabled || !canWrite) return undefined;
+      let active = true;
+      void listContacts()
+        .then((rows) => {
+          if (active) setContacts(rows);
+        })
+        .catch(() => {
+          if (active) setContacts([]);
+        });
+      return () => {
+        active = false;
+      };
+    }, [lendingEnabled, canWrite]),
+  );
 
   const handleCheckout = async () => {
-    if (!borrower.trim()) {
-      Alert.alert('Borrower required', 'Enter who is borrowing this item.');
+    if (!contactId) {
+      Alert.alert('Contact required', 'Choose who is borrowing this item.');
       return;
     }
 
     setBusy(true);
     try {
-      const row = await checkoutItem(itemType, itemId, borrower);
+      const row = await checkoutItem(itemType, itemId, contactId);
       onChanged(row);
-      setBorrower('');
+      setContactId(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not check out.';
-      Alert.alert('Checkout failed', message);
+      Alert.alert('Checkout failed', errorMessage(error, 'Could not check out.'));
     } finally {
       setBusy(false);
     }
@@ -76,8 +93,7 @@ export function CheckoutPanel({
             await returnCheckout(activeCheckout.id);
             onChanged(null);
           } catch (error) {
-            const message = error instanceof Error ? error.message : 'Could not return item.';
-            Alert.alert('Return failed', message);
+            Alert.alert('Return failed', errorMessage(error, 'Could not return item.'));
           } finally {
             setBusy(false);
           }
@@ -102,8 +118,7 @@ export function CheckoutPanel({
               await cancelCheckout(activeCheckout.id);
               onChanged(null);
             } catch (error) {
-              const message = error instanceof Error ? error.message : 'Could not cancel loan.';
-              Alert.alert('Cancel failed', message);
+              Alert.alert('Cancel failed', errorMessage(error, 'Could not cancel loan.'));
             } finally {
               setBusy(false);
             }
@@ -114,22 +129,36 @@ export function CheckoutPanel({
   };
 
   const handleSaveBorrower = async () => {
-    if (!activeCheckout) return;
-    if (!borrowerDraft.trim()) {
-      Alert.alert('Borrower required', 'Enter who is borrowing this item.');
-      return;
-    }
+    if (!activeCheckout || !contactId) return;
     setBusy(true);
     try {
-      const row = await updateCheckoutBorrower(activeCheckout.id, borrowerDraft);
+      const row = await updateCheckoutBorrower(activeCheckout.id, contactId);
       onChanged(row);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not update borrower.';
-      Alert.alert('Update failed', message);
+      Alert.alert('Update failed', errorMessage(error, 'Could not update borrower.'));
     } finally {
       setBusy(false);
     }
   };
+
+  if (!lendingEnabled) {
+    if (!activeCheckout) return null;
+    return (
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>Checked out</Text>
+        <Text style={[styles.borrower, { color: colors.text }]}>{activeCheckout.borrowerName}</Text>
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>
+          Since {new Date(activeCheckout.checkedOutAt).toLocaleDateString()}
+        </Text>
+        {canWrite ? (
+          <>
+            <PrimaryButton label="Mark returned" onPress={handleReturn} loading={busy} />
+            <PrimaryButton label="Cancel loan" onPress={handleCancelLoan} loading={busy} variant="danger" />
+          </>
+        ) : null}
+      </View>
+    );
+  }
 
   if (activeCheckout) {
     return (
@@ -141,34 +170,20 @@ export function CheckoutPanel({
         </Text>
         {canWrite ? (
           <>
-            <TextInput
-              value={borrowerDraft}
-              onChangeText={setBorrowerDraft}
-              placeholder="Borrower name"
-              placeholderTextColor={colors.placeholder}
-              autoCapitalize="words"
-              style={[
-                styles.input,
-                {
-                  color: colors.text,
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                },
-              ]}
+            <ContactChoices
+              contacts={contacts}
+              selectedId={contactId}
+              onSelect={setContactId}
+              onAdd={() => router.push('/contacts/edit')}
             />
             <PrimaryButton
               label="Save borrower"
               onPress={handleSaveBorrower}
               loading={busy}
-              disabled={borrowerDraft.trim() === activeCheckout.borrowerName}
+              disabled={!contactId || contactId === activeCheckout.contactId}
             />
             <PrimaryButton label="Mark returned" onPress={handleReturn} loading={busy} />
-            <PrimaryButton
-              label="Cancel loan"
-              onPress={handleCancelLoan}
-              loading={busy}
-              variant="danger"
-            />
+            <PrimaryButton label="Cancel loan" onPress={handleCancelLoan} loading={busy} variant="danger" />
           </>
         ) : null}
       </View>
@@ -199,24 +214,69 @@ export function CheckoutPanel({
     <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <Text style={[styles.label, { color: colors.textSecondary }]}>Check out</Text>
       <Text style={[styles.meta, { color: colors.textTertiary }]}>
-        Available — enter a free-text borrower name (friend, family, etc.)
+        Choose a contact outside this household. Their name is saved on the loan.
       </Text>
-      <TextInput
-        value={borrower}
-        onChangeText={setBorrower}
-        placeholder="Borrower name"
-        placeholderTextColor={colors.placeholder}
-        autoCapitalize="words"
-        style={[
-          styles.input,
-          {
-            color: colors.text,
-            backgroundColor: colors.background,
-            borderColor: colors.border,
-          },
-        ]}
+      <ContactChoices
+        contacts={contacts}
+        selectedId={contactId}
+        onSelect={setContactId}
+        onAdd={() => router.push('/contacts/edit')}
       />
-      <PrimaryButton label="Check out" onPress={handleCheckout} loading={busy} />
+      <PrimaryButton label="Check out" onPress={handleCheckout} loading={busy} disabled={!contactId} />
+    </View>
+  );
+}
+
+function ContactChoices({
+  contacts,
+  selectedId,
+  onSelect,
+  onAdd,
+}: {
+  contacts: Contact[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onAdd: () => void;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View style={styles.choices}>
+      {contacts.length === 0 ? (
+        <Text style={[styles.meta, { color: colors.textSecondary }]}>
+          Add someone outside the household before lending.
+        </Text>
+      ) : (
+        contacts.map((contact) => {
+          const selected = contact.id === selectedId;
+          return (
+            <Pressable
+              key={contact.id}
+              onPress={() => onSelect(contact.id)}
+              accessibilityRole="button"
+              accessibilityLabel={contact.name}
+              accessibilityState={{ selected }}
+              style={[
+                styles.choice,
+                {
+                  backgroundColor: selected ? colors.accentMuted : colors.background,
+                  borderColor: selected ? colors.accent : colors.border,
+                },
+              ]}
+            >
+              <Text style={{ color: selected ? colors.accent : colors.text, fontWeight: '700' }}>
+                {contact.name}
+              </Text>
+              {contact.linkedUserId ? (
+                <Text style={[styles.choiceMeta, { color: colors.textTertiary }]}>Account linked</Text>
+              ) : null}
+            </Pressable>
+          );
+        })
+      )}
+      <Pressable onPress={onAdd} accessibilityRole="button" accessibilityLabel="Add contact" style={styles.add}>
+        <Text style={{ color: colors.accent, fontWeight: '700' }}>Add contact</Text>
+      </Pressable>
     </View>
   );
 }
@@ -242,11 +302,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-  input: {
+  choices: {
+    gap: spacing.sm,
+  },
+  choice: {
     minHeight: 44,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    fontSize: 16,
+    paddingVertical: spacing.sm,
+    justifyContent: 'center',
+  },
+  choiceMeta: {
+    fontSize: 13,
+  },
+  add: {
+    minHeight: 44,
+    justifyContent: 'center',
   },
 });

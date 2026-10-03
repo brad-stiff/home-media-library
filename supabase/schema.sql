@@ -24,6 +24,7 @@ create table public.households (
   show_movies boolean not null default true,
   show_books boolean not null default true,
   show_mtg boolean not null default true,
+  lending_enabled boolean not null default true,
   created_at timestamptz not null default now()
 );
 
@@ -2230,3 +2231,456 @@ end $$;
 alter table public.mtg_deck_cards
   add constraint mtg_deck_cards_deck_id_scryfall_id_board_foil_key
   unique (deck_id, scryfall_id, board, foil);
+
+-- ---------------------------------------------------------------------------
+-- Phase 12 — lending contacts and household checkout visibility
+-- Safe to run on a database that already has Phases 1–11.
+-- Existing projects: run from this banner to the end of the file.
+-- Contacts are people outside the household. Checkout stores a snapshot of
+-- the contact name. Email match links an account; it does not join this home.
+-- ---------------------------------------------------------------------------
+
+alter table public.households
+  add column if not exists lending_enabled boolean not null default true;
+
+create table if not exists public.contacts (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households (id) on delete cascade,
+  name text not null,
+  email text,
+  phone text,
+  sms_reminders boolean not null default false,
+  linked_user_id uuid references auth.users (id) on delete set null,
+  app_invited_at timestamptz,
+  created_by uuid references auth.users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint contacts_name_not_blank check (length(trim(name)) > 0),
+  constraint contacts_sms_needs_phone check (
+    sms_reminders = false
+    or (phone is not null and length(trim(phone)) > 0)
+  )
+);
+
+create index if not exists contacts_household_name_idx
+  on public.contacts (household_id, name);
+
+create unique index if not exists contacts_household_email_idx
+  on public.contacts (household_id, email)
+  where email is not null;
+
+drop trigger if exists contacts_set_updated_at on public.contacts;
+create trigger contacts_set_updated_at
+  before update on public.contacts
+  for each row execute function public.set_updated_at();
+
+alter table public.contacts enable row level security;
+
+drop policy if exists "Members can read household contacts" on public.contacts;
+create policy "Members can read household contacts"
+  on public.contacts for select
+  using (public.is_household_member(household_id));
+
+alter table public.checkouts
+  add column if not exists contact_id uuid references public.contacts (id) on delete restrict;
+
+create index if not exists checkouts_contact_active_idx
+  on public.checkouts (contact_id)
+  where contact_id is not null
+    and returned_at is null
+    and cancelled_at is null;
+
+create or replace function public.set_household_lending(p_enabled boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_admin(hid) then
+    raise exception 'Only admins can change checkout for the household';
+  end if;
+
+  update public.households
+  set lending_enabled = p_enabled
+  where id = hid;
+end;
+$$;
+
+create or replace function public.save_contact(
+  p_contact_id uuid,
+  p_name text,
+  p_email text,
+  p_phone text,
+  p_sms_reminders boolean
+)
+returns public.contacts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+  v_name text := trim(regexp_replace(coalesce(p_name, ''), '\s+', ' ', 'g'));
+  v_email text := nullif(lower(trim(coalesce(p_email, ''))), '');
+  v_phone text := nullif(trim(coalesce(p_phone, '')), '');
+  v_sms boolean := coalesce(p_sms_reminders, false);
+  linked uuid;
+  row public.contacts;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_writer(hid) then
+    raise exception 'Viewers cannot edit contacts';
+  end if;
+  if v_name is null or length(v_name) < 1 then
+    raise exception 'Enter a contact name';
+  end if;
+  if length(v_name) > 80 then
+    raise exception 'Contact name is too long';
+  end if;
+  if v_email is not null and v_email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then
+    raise exception 'Enter a valid email or leave it blank';
+  end if;
+  if v_email is not null and length(v_email) > 254 then
+    raise exception 'Email is too long';
+  end if;
+  if v_phone is not null and length(v_phone) > 40 then
+    raise exception 'Phone number is too long';
+  end if;
+  if v_phone is null then
+    v_sms := false;
+  end if;
+
+  if v_email is not null then
+    select id into linked
+    from auth.users
+    where lower(email) = v_email
+    limit 1;
+
+    if linked is not null and exists (
+      select 1
+      from public.household_members
+      where household_id = hid
+        and user_id = linked
+    ) then
+      raise exception 'That email belongs to someone in this household. Contacts are people outside the home.';
+    end if;
+
+    if exists (
+      select 1
+      from public.contacts
+      where household_id = hid
+        and email = v_email
+        and id is distinct from p_contact_id
+    ) then
+      raise exception 'A contact with that email already exists';
+    end if;
+  end if;
+
+  if p_contact_id is null then
+    insert into public.contacts (
+      household_id, name, email, phone, sms_reminders, linked_user_id, created_by
+    )
+    values (hid, v_name, v_email, v_phone, v_sms, linked, auth.uid())
+    returning * into row;
+  else
+    update public.contacts
+    set
+      name = v_name,
+      email = v_email,
+      phone = v_phone,
+      sms_reminders = v_sms,
+      linked_user_id = linked
+    where id = p_contact_id
+      and household_id = hid
+    returning * into row;
+
+    if row is null then
+      raise exception 'Contact not found';
+    end if;
+  end if;
+
+  return row;
+end;
+$$;
+
+create or replace function public.delete_contact(p_contact_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_writer(hid) then
+    raise exception 'Viewers cannot delete contacts';
+  end if;
+  if not exists (
+    select 1
+    from public.contacts
+    where id = p_contact_id
+      and household_id = hid
+  ) then
+    raise exception 'Contact not found';
+  end if;
+  if exists (
+    select 1
+    from public.checkouts
+    where contact_id = p_contact_id
+      and returned_at is null
+      and cancelled_at is null
+  ) then
+    raise exception 'Return or cancel active loans for this contact before deleting them';
+  end if;
+
+  update public.checkouts
+  set contact_id = null
+  where contact_id = p_contact_id
+    and household_id = hid;
+
+  delete from public.contacts
+  where id = p_contact_id
+    and household_id = hid;
+end;
+$$;
+
+create or replace function public.mark_contact_app_invite(p_contact_id uuid)
+returns public.contacts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+  row public.contacts;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_writer(hid) then
+    raise exception 'Viewers cannot invite contacts';
+  end if;
+
+  update public.contacts
+  set app_invited_at = now()
+  where id = p_contact_id
+    and household_id = hid
+    and email is not null
+  returning * into row;
+
+  if row is null then
+    raise exception 'Add an email before inviting them to create an account';
+  end if;
+
+  return row;
+end;
+$$;
+
+drop function if exists public.checkout_item(text, uuid, text, text);
+
+create or replace function public.checkout_item(
+  p_item_type text,
+  p_item_id uuid,
+  p_contact_id uuid,
+  p_notes text default null
+)
+returns public.checkouts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+  row public.checkouts;
+  contact public.contacts;
+  borrower text;
+  movie_bluray boolean;
+  movie_4k boolean;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_writer(hid) then
+    raise exception 'Viewers cannot check out items';
+  end if;
+  if coalesce((select lending_enabled from public.households where id = hid), true) = false then
+    raise exception 'Checkout is turned off for this household';
+  end if;
+  if p_item_type not in ('movie', 'book') then
+    raise exception 'Invalid item type';
+  end if;
+
+  select * into contact
+  from public.contacts
+  where id = p_contact_id
+    and household_id = hid;
+
+  if contact is null then
+    raise exception 'Choose a contact';
+  end if;
+  if contact.linked_user_id is not null and exists (
+    select 1
+    from public.household_members
+    where household_id = hid
+      and user_id = contact.linked_user_id
+  ) then
+    raise exception 'That contact is in this household. Lending is for people outside the home.';
+  end if;
+
+  borrower := trim(contact.name);
+
+  if p_item_type = 'movie' then
+    select has_bluray, has_4k into movie_bluray, movie_4k
+    from public.movies
+    where id = p_item_id and household_id = hid;
+
+    if movie_bluray is null then
+      raise exception 'Movie not found in your household';
+    end if;
+    if not movie_bluray and not movie_4k then
+      raise exception 'Digital-only movies cannot be checked out';
+    end if;
+  else
+    if not exists (
+      select 1 from public.books
+      where id = p_item_id and household_id = hid
+    ) then
+      raise exception 'Book not found in your household';
+    end if;
+  end if;
+
+  if exists (
+    select 1 from public.checkouts
+    where household_id = hid
+      and item_type = p_item_type
+      and item_id = p_item_id
+      and returned_at is null
+      and cancelled_at is null
+  ) then
+    raise exception 'This item is already checked out';
+  end if;
+
+  insert into public.checkouts (
+    household_id, item_type, item_id, contact_id, borrower_name, checked_out_by, notes
+  )
+  values (
+    hid,
+    p_item_type,
+    p_item_id,
+    contact.id,
+    borrower,
+    auth.uid(),
+    nullif(trim(p_notes), '')
+  )
+  returning * into row;
+
+  return row;
+end;
+$$;
+
+drop function if exists public.update_checkout_borrower(uuid, text);
+
+create or replace function public.update_checkout_borrower(
+  p_checkout_id uuid,
+  p_contact_id uuid
+)
+returns public.checkouts
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+  row public.checkouts;
+  contact public.contacts;
+  borrower text;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_writer(hid) then
+    raise exception 'Viewers cannot change a loan';
+  end if;
+  if coalesce((select lending_enabled from public.households where id = hid), true) = false then
+    raise exception 'Checkout is turned off for this household';
+  end if;
+
+  select * into contact
+  from public.contacts
+  where id = p_contact_id
+    and household_id = hid;
+
+  if contact is null then
+    raise exception 'Choose a contact';
+  end if;
+  if contact.linked_user_id is not null and exists (
+    select 1
+    from public.household_members
+    where household_id = hid
+      and user_id = contact.linked_user_id
+  ) then
+    raise exception 'That contact is in this household. Lending is for people outside the home.';
+  end if;
+
+  borrower := trim(contact.name);
+
+  update public.checkouts
+  set
+    contact_id = contact.id,
+    borrower_name = borrower
+  where id = p_checkout_id
+    and household_id = hid
+    and returned_at is null
+    and cancelled_at is null
+  returning * into row;
+
+  if row.id is null then
+    raise exception 'Active checkout not found';
+  end if;
+
+  return row;
+end;
+$$;
+
+revoke all on function public.set_household_lending(boolean) from public, anon;
+revoke all on function public.save_contact(uuid, text, text, text, boolean) from public, anon;
+revoke all on function public.delete_contact(uuid) from public, anon;
+revoke all on function public.mark_contact_app_invite(uuid) from public, anon;
+revoke all on function public.checkout_item(text, uuid, uuid, text) from public, anon;
+revoke all on function public.update_checkout_borrower(uuid, uuid) from public, anon;
+
+grant execute on function public.set_household_lending(boolean) to authenticated;
+grant execute on function public.save_contact(uuid, text, text, text, boolean) to authenticated;
+grant execute on function public.delete_contact(uuid) to authenticated;
+grant execute on function public.mark_contact_app_invite(uuid) to authenticated;
+grant execute on function public.checkout_item(text, uuid, uuid, text) to authenticated;
+grant execute on function public.update_checkout_borrower(uuid, uuid) to authenticated;

@@ -128,6 +128,7 @@ export default function MovieDetailScreen() {
 
   const backdrop = backdropUrl(movie.backdropPath);
   const ownershipLabel = formatOwnershipLabel(movie);
+  const lendingOn = household?.lendingEnabled !== false;
 
   return (
     <>
@@ -194,21 +195,24 @@ export default function MovieDetailScreen() {
             </View>
           ) : null}
 
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Lending</Text>
-            <CheckoutPanel
-              itemType="movie"
-              itemId={movie.id}
-              activeCheckout={activeCheckout}
-              onChanged={(next) => {
-                setActiveCheckout(next);
-                void listItemCheckouts('movie', movie.id).then(setLoanHistory);
-              }}
-              canWrite={canLend}
-              allowCheckout={movie.hasBluray || movie.has4k}
-            />
-            <LoanHistory loans={loanHistory} />
-          </View>
+          {lendingOn || activeCheckout ? (
+            <View style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Lending</Text>
+              <CheckoutPanel
+                itemType="movie"
+                itemId={movie.id}
+                activeCheckout={activeCheckout}
+                onChanged={(next) => {
+                  setActiveCheckout(next);
+                  void listItemCheckouts('movie', movie.id).then(setLoanHistory);
+                }}
+                canWrite={canLend}
+                allowCheckout={movie.hasBluray || movie.has4k}
+                lendingEnabled={lendingOn}
+              />
+              {lendingOn ? <LoanHistory loans={loanHistory} /> : null}
+            </View>
+          ) : null}
 
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>In your library</Text>

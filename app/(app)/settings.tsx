@@ -18,6 +18,7 @@ import { useAuth } from '../../lib/auth';
 import { API_CREDITS } from '../../lib/credits';
 import {
   errorMessage,
+  setHouseholdLending,
   setHouseholdMedia,
 } from '../../lib/household';
 import { useHousehold } from '../../lib/householdContext';
@@ -141,6 +142,15 @@ export default function SettingsScreen() {
       await refreshHousehold();
     } catch (error) {
       Alert.alert('Could not update the household', errorMessage(error, 'Try again.'));
+    }
+  };
+
+  const handleLending = async (enabled: boolean) => {
+    try {
+      await setHouseholdLending(enabled);
+      await refreshHousehold();
+    } catch (error) {
+      Alert.alert('Could not update checkout', errorMessage(error, 'Try again.'));
     }
   };
 
@@ -534,6 +544,42 @@ export default function SettingsScreen() {
           </View>
         ) : null}
 
+        {household ? (
+          <View style={styles.section}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Contacts</Text>
+            <Text style={[styles.hint, { color: colors.textTertiary }]}>
+              People outside this household. Checkout picks a contact, and an email can link an
+              existing account or invite them to create one.
+            </Text>
+            <PrimaryButton label="Contacts" onPress={() => router.push('/contacts')} />
+          </View>
+        ) : null}
+
+        {isAdmin && household ? (
+          <View style={styles.section}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Checkout</Text>
+            <Text style={[styles.hint, { color: colors.textTertiary }]}>
+              Turning this off hides lending, the loans list, checkout badges, availability filters,
+              and loan history. The catalog and existing loans stay. A title that is still out can
+              be returned or cancelled.
+            </Text>
+            <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.rowText}>
+                <Text style={[styles.rowTitle, { color: colors.text }]}>Checkout</Text>
+                <Text style={[styles.hint, { color: colors.textTertiary }]}>
+                  {household.lendingEnabled ? 'On for the household' : 'Hidden for everyone'}
+                </Text>
+              </View>
+              <Switch
+                value={household.lendingEnabled}
+                onValueChange={(value) => void handleLending(value)}
+                trackColor={{ true: colors.accent, false: colors.border }}
+                accessibilityLabel="Household checkout"
+              />
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.section}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>About</Text>
           {API_CREDITS.map((credit) => (
@@ -547,8 +593,8 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>Export library</Text>
           <Text style={[styles.hint, { color: colors.textTertiary }]}>
-            Share a JSON backup of movies, books, MTG cards, decks, and checkouts. Sharing the file
-            leaves the household in place.
+            Share a JSON backup of movies, books, MTG cards, decks, checkouts, and contacts. Sharing
+            the file leaves the household in place.
           </Text>
           <PrimaryButton
             label="Export library"

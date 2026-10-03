@@ -136,6 +136,8 @@ export default function BookDetailScreen() {
     );
   }
 
+  const lendingOn = household?.lendingEnabled !== false;
+
   return (
     <>
       <Stack.Screen options={{ title: book.title }} />
@@ -161,17 +163,20 @@ export default function BookDetailScreen() {
           Added {new Date(book.addedAt).toLocaleDateString()}
           {addedByLabel ? ` · ${addedByLabel}` : ''}
         </Text>
-        <CheckoutPanel
-          itemType="book"
-          itemId={book.id}
-          activeCheckout={activeCheckout}
-          onChanged={(next) => {
-            setActiveCheckout(next);
-            void listItemCheckouts('book', book.id).then(setLoanHistory);
-          }}
-          canWrite={canLend}
-        />
-        <LoanHistory loans={loanHistory} />
+        {lendingOn || activeCheckout ? (
+          <CheckoutPanel
+            itemType="book"
+            itemId={book.id}
+            activeCheckout={activeCheckout}
+            onChanged={(next) => {
+              setActiveCheckout(next);
+              void listItemCheckouts('book', book.id).then(setLoanHistory);
+            }}
+            canWrite={canLend}
+            lendingEnabled={lendingOn}
+          />
+        ) : null}
+        {lendingOn ? <LoanHistory loans={loanHistory} /> : null}
         {canEdit ? (
           <PrimaryButton
             label="Refresh from Open Library"

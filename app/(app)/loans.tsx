@@ -45,6 +45,7 @@ export default function LoansScreen() {
   const { colors } = useTheme();
   const { household } = useHousehold();
   const writer = household ? isWriter(household.role) : false;
+  const lendingOn = household?.lendingEnabled !== false;
   const [filter, setFilter] = useState<CheckoutStatus>('active');
   const [loans, setLoans] = useState<HouseholdLoan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,8 +65,13 @@ export default function LoansScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (!lendingOn) {
+        setLoans([]);
+        setLoading(false);
+        return;
+      }
       void load();
-    }, [load]),
+    }, [load, lendingOn]),
   );
 
   const visible = useMemo(
@@ -105,6 +111,17 @@ export default function LoansScreen() {
       },
     ]);
   };
+
+  if (!lendingOn) {
+    return (
+      <View style={styles.container}>
+        <EmptyState
+          title="Checkout is hidden"
+          message="An admin turned off checkout for this household. Open a title that is still checked out to return or cancel that loan."
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

@@ -24,6 +24,7 @@ export type HouseholdMembership = {
   showMovies: boolean;
   showBooks: boolean;
   showMtg: boolean;
+  lendingEnabled: boolean;
 };
 
 export type HouseholdMember = {
@@ -49,7 +50,7 @@ export async function fetchMyHousehold(): Promise<HouseholdMembership | null> {
 
   const withMedia = await supabase
     .from('households')
-    .select('id, name, created_by, show_movies, show_books, show_mtg')
+    .select('id, name, created_by, show_movies, show_books, show_mtg, lending_enabled')
     .eq('id', membership.household_id)
     .single();
 
@@ -80,7 +81,13 @@ export async function fetchMyHousehold(): Promise<HouseholdMembership | null> {
     showMovies: booleanFlag(household, 'show_movies'),
     showBooks: booleanFlag(household, 'show_books'),
     showMtg: booleanFlag(household, 'show_mtg'),
+    lendingEnabled: booleanFlag(household, 'lending_enabled'),
   };
+}
+
+export async function setHouseholdLending(enabled: boolean): Promise<void> {
+  const { error } = await supabase.rpc('set_household_lending', { p_enabled: enabled });
+  if (error) throw error;
 }
 
 export async function setHouseholdMedia(shows: {

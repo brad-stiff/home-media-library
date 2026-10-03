@@ -68,6 +68,7 @@ export default function LibraryScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { household } = useHousehold();
+  const lendingOn = household?.lendingEnabled !== false;
   const { profile, loading: profileLoading, saveLibraryView } = useProfile();
   const writer = household ? isWriter(household.role) : false;
   const [tab, setTab] = useState<DockType | null>(null);
@@ -113,7 +114,9 @@ export default function LibraryScreen() {
   const compact = profile.libraryView.density === 'compact';
   const tabPrefs = tab ? profile.libraryView[tab] : profile.libraryView.movies;
   const layout = tabPrefs.layout;
-  const availability = tab === 'books' ? profile.libraryView.books.availability : profile.libraryView.movies.availability;
+  const movieAvailability = lendingOn ? profile.libraryView.movies.availability : 'all';
+  const bookAvailability = lendingOn ? profile.libraryView.books.availability : 'all';
+  const availability = tab === 'books' ? bookAvailability : movieAvailability;
   const mtgSort = profile.libraryView.mtg.sort;
   const catalogSort: CatalogSort = tab && tab !== 'mtg' ? profile.libraryView[tab].sort : 'title';
   const deckSort = profile.libraryView.decks.sort;
@@ -136,11 +139,19 @@ export default function LibraryScreen() {
       if (activeTab === 'movies') {
         const results = await searchMoviesInLibrary(searchQuery);
         setMovies(results);
-        setCheckouts(await getActiveCheckoutsByItemIds('movie', results.map((movie) => movie.id)));
+        setCheckouts(
+          household?.lendingEnabled === false
+            ? new Map()
+            : await getActiveCheckoutsByItemIds('movie', results.map((movie) => movie.id)),
+        );
       } else if (activeTab === 'books') {
         const results = await searchBooksInLibrary(searchQuery);
         setBooks(results);
-        setCheckouts(await getActiveCheckoutsByItemIds('book', results.map((book) => book.id)));
+        setCheckouts(
+          household?.lendingEnabled === false
+            ? new Map()
+            : await getActiveCheckoutsByItemIds('book', results.map((book) => book.id)),
+        );
       } else if (mode === 'collection') {
         const results = await searchMtgCollection(searchQuery);
         setMtgCards(results);
@@ -182,16 +193,18 @@ export default function LibraryScreen() {
       ),
       headerRight: () => (
         <View style={{ flexDirection: 'row', gap: spacing.md }}>
-          <Pressable onPress={() => router.push('/loans')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Loans">
-            <Text style={{ color: colors.accent, fontWeight: '600' }}>Loans</Text>
-          </Pressable>
+          {lendingOn ? (
+            <Pressable onPress={() => router.push('/loans')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Loans">
+              <Text style={{ color: colors.accent, fontWeight: '600' }}>Loans</Text>
+            </Pressable>
+          ) : null}
           <Pressable onPress={() => router.push('/settings')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Settings">
             <Text style={{ color: colors.accent, fontWeight: '600' }}>Settings</Text>
           </Pressable>
         </View>
       ),
     });
-  }, [navigation, router, colors.accent]);
+  }, [navigation, router, colors.accent, lendingOn]);
 
   const selectTab = (next: DockType) => {
     setTab(next);
@@ -203,32 +216,30 @@ export default function LibraryScreen() {
   };
 
   const filteredMovies = useMemo(() => {
-    const availabilityFilter = profile.libraryView.movies.availability;
     const matched =
-      availabilityFilter === 'all'
+      movieAvailability === 'all'
         ? movies
         : movies.filter((movie) =>
-            availabilityFilter === 'out' ? checkouts.has(movie.id) : !checkouts.has(movie.id),
+            movieAvailability === 'out' ? checkouts.has(movie.id) : !checkouts.has(movie.id),
           );
     return sortCatalog(matched, profile.libraryView.movies.sort, {
       title: (movie) => movie.title,
       year: (movie) => movie.year,
       addedAt: (movie) => movie.addedAt,
     });
-  }, [movies, checkouts, profile.libraryView.movies]);
+  }, [movies, checkouts, movieAvailability, profile.libraryView.movies.sort]);
 
   const filteredBooks = useMemo(() => {
-    const availabilityFilter = profile.libraryView.books.availability;
     const matched =
-      availabilityFilter === 'all'
+      bookAvailability === 'all'
         ? books
-        : books.filter((book) => (availabilityFilter === 'out' ? checkouts.has(book.id) : !checkouts.has(book.id)));
+        : books.filter((book) => (bookAvailability === 'out' ? checkouts.has(book.id) : !checkouts.has(book.id)));
     return sortCatalog(matched, profile.libraryView.books.sort, {
       title: (book) => book.title,
       year: (book) => book.year,
       addedAt: (book) => book.addedAt,
     });
-  }, [books, checkouts, profile.libraryView.books]);
+  }, [books, checkouts, bookAvailability, profile.libraryView.books.sort]);
 
   const sortedCards = useMemo(
     () =>
@@ -396,7 +407,7 @@ export default function LibraryScreen() {
                 <MovieGridItem
                   movie={item}
                   compact={compact}
-                  checkoutLabel={checkouts.get(item.id)?.borrowerName}
+                  checkoutLabel={lendingOn ? checkouts.get(item.id)?.borrowerName : undefined}
                   onPress={() => router.push(`/movie/${item.id}`)}
                 />
               )}
@@ -409,7 +420,7 @@ export default function LibraryScreen() {
               keyboardDismissMode="on-drag"
               contentContainerStyle={[styles.list, listPad]}
               renderItem={({ item }) => {
-                const loan = checkouts.get(item.id);
+                const loan = lendingOn ? checkouts.get(item.id) : undefined;
                 return (
                   <Pressable
                     onPress={() => router.push(`/movie/${item.id}`)}
@@ -460,7 +471,7 @@ export default function LibraryScreen() {
               contentContainerStyle={[styles.grid, listPad]}
               columnWrapperStyle={styles.row}
               renderItem={({ item }) => {
-                const loan = checkouts.get(item.id);
+                const loan = lendingOn ? checkouts.get(item.id) : undefined;
                 return (
                   <Pressable
                     onPress={() => router.push(`/book/${item.id}`)}
@@ -497,7 +508,7 @@ export default function LibraryScreen() {
               keyboardDismissMode="on-drag"
               contentContainerStyle={[styles.list, listPad]}
               renderItem={({ item }) => {
-                const loan = checkouts.get(item.id);
+                const loan = lendingOn ? checkouts.get(item.id) : undefined;
                 return (
                   <Pressable
                     onPress={() => router.push(`/book/${item.id}`)}
@@ -669,7 +680,7 @@ export default function LibraryScreen() {
                 setSearchOpen(false);
               }}
             />
-          ) : (
+          ) : lendingOn ? (
             <FilterChoices
               label="Availability"
               options={AVAILABILITY_FILTERS}
@@ -680,7 +691,7 @@ export default function LibraryScreen() {
                 }
               }}
             />
-          )}
+          ) : null}
           <FilterChoices
             label="Sort"
             options={sortOptions}

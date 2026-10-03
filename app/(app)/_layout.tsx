@@ -45,6 +45,8 @@ function AppNavigator() {
         />
         <Stack.Screen name="household/join" options={{ title: 'Join Household' }} />
         <Stack.Screen name="household/confirm-departure" options={{ title: 'Before you leave' }} />
+        <Stack.Screen name="contacts/index" options={{ title: 'Contacts' }} />
+        <Stack.Screen name="contacts/edit" options={{ title: 'Contact' }} />
         <Stack.Screen name="loans" options={{ title: 'Loans' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         <Stack.Screen name="scan/index" options={{ title: 'Scan', presentation: 'fullScreenModal' }} />

@@ -10,6 +10,7 @@ export type LibraryBackup = {
   mtgCards: unknown[];
   mtgDecks: (Record<string, unknown> & { cards: unknown[] })[];
   checkouts: unknown[];
+  contacts: unknown[];
 };
 
 async function selectAll(table: string, householdId: string): Promise<unknown[]> {
@@ -21,12 +22,13 @@ async function selectAll(table: string, householdId: string): Promise<unknown[]>
 /** JSON backup of the tables that exist today. Games and Pokémon fields arrive with later phases. */
 export async function buildLibraryBackup(): Promise<LibraryBackup> {
   const household = await getMyHousehold();
-  const [movies, books, mtgCards, decks, checkouts] = await Promise.all([
+  const [movies, books, mtgCards, decks, checkouts, contacts] = await Promise.all([
     selectAll('movies', household.householdId),
     selectAll('books', household.householdId),
     selectAll('mtg_cards', household.householdId),
     selectAll('mtg_decks', household.householdId),
     selectAll('checkouts', household.householdId),
+    selectAll('contacts', household.householdId),
   ]);
 
   const mtgDecks = await Promise.all(
@@ -49,5 +51,6 @@ export async function buildLibraryBackup(): Promise<LibraryBackup> {
     mtgCards,
     mtgDecks,
     checkouts,
+    contacts,
   };
 }
