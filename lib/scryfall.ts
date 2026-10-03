@@ -15,6 +15,12 @@ export type ScryfallCard = {
   set_name?: string;
   collector_number?: string;
   rarity?: string;
+  color_identity?: string[];
+  keywords?: string[];
+  oracle_text?: string;
+  legalities?: {
+    standard?: string;
+  };
   image_uris?: {
     small?: string;
     normal?: string;
@@ -24,6 +30,7 @@ export type ScryfallCard = {
     name?: string;
     mana_cost?: string;
     type_line?: string;
+    oracle_text?: string;
     image_uris?: { small?: string; normal?: string; large?: string };
   }[];
 };
@@ -62,6 +69,24 @@ export function scryfallImageUri(card: ScryfallCard, size: 'small' | 'normal' = 
 
 export function scryfallDisplayName(card: ScryfallCard): string {
   return card.name;
+}
+
+export function scryfallOracleText(card: ScryfallCard): string {
+  if (card.oracle_text) return card.oracle_text;
+  return (card.card_faces ?? [])
+    .map((face) => face.oracle_text)
+    .filter((text): text is string => Boolean(text))
+    .join('\n');
+}
+
+export function scryfallTypeLine(card: ScryfallCard): string | null {
+  if (card.type_line) return card.type_line;
+  const faces = (card.card_faces ?? []).map((face) => face.type_line).filter((type): type is string => Boolean(type));
+  return faces.length > 0 ? faces.join(' // ') : null;
+}
+
+export function scryfallStandardLegality(card: ScryfallCard): string | null {
+  return card.legalities?.standard ?? null;
 }
 
 export async function searchScryfallCards(query: string): Promise<ScryfallCard[]> {

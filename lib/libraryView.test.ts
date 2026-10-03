@@ -7,6 +7,7 @@ import {
   resolveOpeningTab,
   sortCatalog,
   sortDecks,
+  sortMtgCollection,
   visibleDockTabs,
   type DockType,
   type LibraryViewPrefs,
@@ -28,6 +29,7 @@ describe('parseLibraryView', () => {
       dockOrder: ['mtg', 'movies', 'mtg', 'nope'],
       movies: { layout: 'list', sort: 'year', availability: 'out' },
       decks: { sort: 'added' },
+      mtg: { sort: 'color' },
     });
     expect(parsed.opening).toBe('books');
     expect(parsed.lastTab).toBe('movies');
@@ -36,6 +38,7 @@ describe('parseLibraryView', () => {
     expect(parsed.movies).toEqual({ layout: 'list', sort: 'year', availability: 'out' });
     expect(parsed.books.layout).toBe('grid');
     expect(parsed.decks.sort).toBe('added');
+    expect(parsed.mtg.sort).toBe('color');
   });
 });
 
@@ -130,5 +133,45 @@ describe('sort', () => {
     const deckFields = { title: (deck: (typeof decks)[number]) => deck.name, addedAt: (deck: (typeof decks)[number]) => deck.createdAt };
     expect(sortDecks(decks, 'title', deckFields).map((deck) => deck.name)).toEqual(['Amy', 'Zed']);
     expect(sortDecks(decks, 'added', deckFields).map((deck) => deck.name)).toEqual(['Zed', 'Amy']);
+  });
+
+  it('sorts an MTG collection by set, color, and quantity', () => {
+    const cards = [
+      { title: 'Bolt', addedAt: '2020-01-01', setName: 'Zendikar', collector: '10', color: 'R', qty: 1 },
+      { title: 'Birds', addedAt: '2021-01-01', setName: 'Alpha', collector: '2', color: 'G', qty: 4 },
+      { title: 'Swords', addedAt: '2022-01-01', setName: 'Alpha', collector: '20', color: 'W', qty: 2 },
+      { title: 'Sol Ring', addedAt: '2023-01-01', setName: 'Commander', collector: null, color: '', qty: 3 },
+      { title: 'Unknown', addedAt: '2024-01-01', setName: null, collector: null, color: null, qty: 9 },
+    ];
+    const cardFields = {
+      title: (card: (typeof cards)[number]) => card.title,
+      year: () => null,
+      addedAt: (card: (typeof cards)[number]) => card.addedAt,
+      setName: (card: (typeof cards)[number]) => card.setName,
+      collectorNumber: (card: (typeof cards)[number]) => card.collector,
+      colorIdentity: (card: (typeof cards)[number]) => card.color,
+      qty: (card: (typeof cards)[number]) => card.qty,
+    };
+    expect(sortMtgCollection(cards, 'set', cardFields).map((card) => card.title)).toEqual([
+      'Birds',
+      'Swords',
+      'Sol Ring',
+      'Bolt',
+      'Unknown',
+    ]);
+    expect(sortMtgCollection(cards, 'color', cardFields).map((card) => card.title)).toEqual([
+      'Swords',
+      'Bolt',
+      'Birds',
+      'Sol Ring',
+      'Unknown',
+    ]);
+    expect(sortMtgCollection(cards, 'qty', cardFields).map((card) => card.title)).toEqual([
+      'Unknown',
+      'Birds',
+      'Sol Ring',
+      'Swords',
+      'Bolt',
+    ]);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractArchidektId } from './archidekt';
+import { archidektDeckFormat, archidektFoil, boardForArchidekt, extractArchidektId } from './archidekt';
 import {
   cleanProductTitleForSearch,
   isIsbn,
@@ -146,6 +146,22 @@ describe('Archidekt ids', () => {
     expect(extractArchidektId('')).toBeNull();
     expect(extractArchidektId('my commander deck')).toBeNull();
     expect(extractArchidektId('https://example.com/decks/48291')).toBeNull();
+  });
+
+  it('keeps Commander and Standard, and asks the user for any other Archidekt format', () => {
+    expect(archidektDeckFormat(3)).toBe('commander');
+    expect(archidektDeckFormat(1)).toBe('standard');
+    expect(archidektDeckFormat(2)).toBeNull();
+  });
+
+  it('maps Archidekt categories onto boards and treats foil as its own printing', () => {
+    expect(boardForArchidekt(['Commander'], false)).toBe('commander');
+    expect(boardForArchidekt(['Sideboard'], false)).toBe('sideboard');
+    expect(boardForArchidekt(['Maybeboard'], false)).toBe('maybeboard');
+    expect(boardForArchidekt(['Creatures'], true)).toBe('maybeboard');
+    expect(boardForArchidekt(['Creatures'], false)).toBe('main');
+    expect(archidektFoil('Foil')).toBe(true);
+    expect(archidektFoil('Etched')).toBe(false);
   });
 });
 

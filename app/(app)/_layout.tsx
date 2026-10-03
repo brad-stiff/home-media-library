@@ -52,6 +52,7 @@ function AppNavigator() {
         <Stack.Screen name="scan/confirm-movie" options={{ title: 'Add Movie' }} />
         <Stack.Screen name="mtg/add" options={{ title: 'Add MTG Card', presentation: 'modal' }} />
         <Stack.Screen name="mtg/import" options={{ title: 'MTG Deck' }} />
+        <Stack.Screen name="mtg/deck-add" options={{ title: 'Add to deck', presentation: 'modal' }} />
         <Stack.Screen name="mtg/deck/[id]" options={{ title: '' }} />
       </Stack>
     </>

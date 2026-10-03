@@ -1,5 +1,6 @@
+import { colorIdentityKey } from './deckLegality';
 import { getMyHousehold } from './household';
-import { ScryfallCard, scryfallDisplayName, scryfallImageUri } from './scryfall';
+import { getScryfallCardsByIds, ScryfallCard, scryfallDisplayName, scryfallImageUri } from './scryfall';
 import { supabase } from './supabase';
 
 export type MtgCard = {
@@ -17,6 +18,7 @@ export type MtgCard = {
   imageUri: string | null;
   qty: number;
   foil: boolean;
+  colorIdentity: string | null;
   addedBy: string | null;
   addedByName: string | null;
   addedAt: string;
@@ -37,6 +39,7 @@ type MtgCardRow = {
   image_uri: string | null;
   qty: number;
   foil: boolean;
+  color_identity: string | null;
   added_by: string | null;
   added_by_name: string | null;
   created_at: string;
@@ -58,6 +61,7 @@ function rowToCard(row: MtgCardRow): MtgCard {
     imageUri: row.image_uri,
     qty: row.qty,
     foil: row.foil,
+    colorIdentity: row.color_identity,
     addedBy: row.added_by,
     addedByName: row.added_by_name,
     addedAt: row.created_at,
@@ -97,6 +101,7 @@ export async function addMtgCardFromScryfall(
 
   const qty = options?.qty && options.qty > 0 ? options.qty : 1;
   const foil = !!options?.foil;
+  const colorIdentity = colorIdentityKey(card.color_identity);
 
   const { data: existing } = await supabase
     .from('mtg_cards')
@@ -110,7 +115,10 @@ export async function addMtgCardFromScryfall(
     const row = existing as MtgCardRow;
     const { data, error } = await supabase
       .from('mtg_cards')
-      .update({ qty: row.qty + qty })
+      .update({
+        qty: row.qty + qty,
+        color_identity: row.color_identity ?? colorIdentity,
+      })
       .eq('id', row.id)
       .select('*')
       .single();
@@ -139,6 +147,7 @@ export async function addMtgCardFromScryfall(
       image_uri: scryfallImageUri(card, 'normal'),
       qty,
       foil,
+      color_identity: colorIdentity,
       added_by: user?.id ?? null,
     })
     .select('*')
@@ -163,6 +172,40 @@ export async function updateMtgCardQty(id: string, qty: number): Promise<void> {
   if (!data?.length) {
     throw new Error('Only the person who added this card, or an admin, can change the quantity.');
   }
+}
+
+const colorCache = new Map<string, string>();
+
+/** Fills Scryfall color identity for collection sorts. Writes it back when this user may edit the row. */
+export async function attachColorIdentities(
+  cards: MtgCard[],
+  canUpdate: (card: MtgCard) => boolean,
+): Promise<MtgCard[]> {
+  const unresolved = cards.filter((card) => card.colorIdentity == null && !colorCache.has(card.scryfallId));
+  if (unresolved.length > 0) {
+    const found = await getScryfallCardsByIds(unresolved.map((card) => card.scryfallId));
+    for (const card of found) {
+      colorCache.set(card.id, colorIdentityKey(card.color_identity));
+    }
+  }
+
+  const next = cards.map((card) => {
+    if (card.colorIdentity != null) return card;
+    const identity = colorCache.get(card.scryfallId);
+    return identity == null ? card : { ...card, colorIdentity: identity };
+  });
+
+  await Promise.all(
+    next.map((card, index) => {
+      const previous = cards[index];
+      if (!previous || previous.colorIdentity != null || card.colorIdentity == null || !canUpdate(card)) {
+        return Promise.resolve();
+      }
+      return supabase.from('mtg_cards').update({ color_identity: card.colorIdentity }).eq('id', card.id);
+    }),
+  );
+
+  return next;
 }
 
 export async function deleteMtgCard(id: string): Promise<void> {

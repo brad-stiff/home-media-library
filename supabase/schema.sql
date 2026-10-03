@@ -610,6 +610,7 @@ create table if not exists public.mtg_cards (
   image_uri text,
   qty integer not null default 1 check (qty > 0),
   foil boolean not null default false,
+  color_identity text,
   added_by uuid references auth.users (id) on delete set null,
   added_by_name text,
   created_at timestamptz not null default now(),
@@ -625,11 +626,13 @@ create table if not exists public.mtg_decks (
   household_id uuid not null references public.households (id) on delete cascade,
   name text not null,
   description text,
+  format text not null default 'commander',
   archidekt_id text,
   created_by uuid references auth.users (id) on delete set null,
   created_by_name text,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint mtg_decks_format_check check (format in ('commander', 'standard'))
 );
 
 create index if not exists mtg_decks_household_idx
@@ -645,9 +648,16 @@ create table if not exists public.mtg_deck_cards (
   mana_cost text,
   type_line text,
   qty integer not null default 1 check (qty > 0),
-  category text not null default 'Deck',
+  category text not null default 'Main',
   is_commander boolean not null default false,
-  unique (deck_id, scryfall_id, category)
+  board text not null default 'main',
+  foil boolean not null default false,
+  color_identity text,
+  oracle_text text,
+  keywords text[] not null default '{}',
+  standard_legality text,
+  unique (deck_id, scryfall_id, board, foil),
+  constraint mtg_deck_cards_board_check check (board in ('commander', 'main', 'sideboard', 'maybeboard'))
 );
 
 create index if not exists mtg_deck_cards_deck_idx
@@ -2097,3 +2107,126 @@ grant execute on function public.delete_own_account() to authenticated;
 
 alter table public.profiles
   add column if not exists library_view jsonb not null default '{}'::jsonb;
+
+-- ---------------------------------------------------------------------------
+-- Phase 11 — deck format, boards, and collection color
+-- Safe to run on a database that already has Phases 1–10.
+-- Deck lists stay separate from collection qty. Foil is its own row.
+-- ---------------------------------------------------------------------------
+
+alter table public.mtg_cards
+  add column if not exists color_identity text;
+
+alter table public.mtg_decks
+  add column if not exists format text not null default 'commander';
+
+alter table public.mtg_decks drop constraint if exists mtg_decks_format_check;
+alter table public.mtg_decks
+  add constraint mtg_decks_format_check
+  check (format in ('commander', 'standard'));
+
+alter table public.mtg_deck_cards
+  add column if not exists board text;
+
+alter table public.mtg_deck_cards
+  add column if not exists foil boolean not null default false;
+
+alter table public.mtg_deck_cards
+  add column if not exists color_identity text;
+
+alter table public.mtg_deck_cards
+  add column if not exists oracle_text text;
+
+alter table public.mtg_deck_cards
+  add column if not exists keywords text[] not null default '{}';
+
+alter table public.mtg_deck_cards
+  add column if not exists standard_legality text;
+
+update public.mtg_deck_cards
+set board = case
+  when is_commander or lower(category) = 'commander' then 'commander'
+  when lower(category) in ('sideboard', 'side') then 'sideboard'
+  when lower(category) in ('maybeboard', 'maybe') then 'maybeboard'
+  else 'main'
+end
+where board is null;
+
+alter table public.mtg_deck_cards
+  alter column board set default 'main';
+
+alter table public.mtg_deck_cards
+  alter column board set not null;
+
+alter table public.mtg_deck_cards drop constraint if exists mtg_deck_cards_board_check;
+alter table public.mtg_deck_cards
+  add constraint mtg_deck_cards_board_check
+  check (board in ('commander', 'main', 'sideboard', 'maybeboard'));
+
+update public.mtg_deck_cards
+set
+  is_commander = (board = 'commander'),
+  category = case board
+    when 'commander' then 'Commander'
+    when 'sideboard' then 'Sideboard'
+    when 'maybeboard' then 'Maybeboard'
+    else 'Main'
+  end
+where is_commander is distinct from (board = 'commander')
+   or category is distinct from case board
+    when 'commander' then 'Commander'
+    when 'sideboard' then 'Sideboard'
+    when 'maybeboard' then 'Maybeboard'
+    else 'Main'
+  end;
+
+-- One row per printing, board, and foil. Combine leftovers from the old category key.
+do $$
+declare
+  rec record;
+begin
+  for rec in
+    select
+      deck_id,
+      scryfall_id,
+      board,
+      foil,
+      (array_agg(id))[1] as keep_id,
+      sum(qty)::int as total
+    from public.mtg_deck_cards
+    group by deck_id, scryfall_id, board, foil
+    having count(*) > 1
+  loop
+    update public.mtg_deck_cards
+    set qty = rec.total
+    where id = rec.keep_id;
+
+    delete from public.mtg_deck_cards
+    where deck_id = rec.deck_id
+      and scryfall_id = rec.scryfall_id
+      and board = rec.board
+      and foil = rec.foil
+      and id <> rec.keep_id;
+  end loop;
+end $$;
+
+do $$
+declare
+  constraint_name text;
+begin
+  for constraint_name in
+    select con.conname
+    from pg_constraint con
+    join pg_class rel on rel.oid = con.conrelid
+    join pg_namespace nsp on nsp.oid = rel.relnamespace
+    where nsp.nspname = 'public'
+      and rel.relname = 'mtg_deck_cards'
+      and con.contype = 'u'
+  loop
+    execute format('alter table public.mtg_deck_cards drop constraint %I', constraint_name);
+  end loop;
+end $$;
+
+alter table public.mtg_deck_cards
+  add constraint mtg_deck_cards_deck_id_scryfall_id_board_foil_key
+  unique (deck_id, scryfall_id, board, foil);

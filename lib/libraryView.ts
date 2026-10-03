@@ -8,6 +8,8 @@ export type LibraryDensity = 'comfortable' | 'compact';
 
 export type CatalogSort = 'title' | 'year' | 'added';
 
+export type MtgCollectionSort = CatalogSort | 'set' | 'color' | 'qty';
+
 export type DeckSort = 'title' | 'added';
 
 export type AvailabilityFilter = 'all' | 'available' | 'out';
@@ -17,6 +19,12 @@ export type OpeningTab = 'resume' | DockType;
 export type TabViewPrefs = {
   layout: LibraryLayout;
   sort: CatalogSort;
+  availability: AvailabilityFilter;
+};
+
+export type MtgTabViewPrefs = {
+  layout: LibraryLayout;
+  sort: MtgCollectionSort;
   availability: AvailabilityFilter;
 };
 
@@ -32,7 +40,7 @@ export type LibraryViewPrefs = {
   movies: TabViewPrefs;
   books: TabViewPrefs;
   games: TabViewPrefs;
-  mtg: TabViewPrefs;
+  mtg: MtgTabViewPrefs;
   pokemon: TabViewPrefs;
   decks: DeckViewPrefs;
 };
@@ -49,6 +57,13 @@ export const CATALOG_SORTS: { id: CatalogSort; label: string }[] = [
   { id: 'title', label: 'Title' },
   { id: 'year', label: 'Year' },
   { id: 'added', label: 'Date added' },
+];
+
+export const MTG_COLLECTION_SORTS: { id: MtgCollectionSort; label: string }[] = [
+  ...CATALOG_SORTS,
+  { id: 'set', label: 'Set' },
+  { id: 'color', label: 'Color' },
+  { id: 'qty', label: 'Qty' },
 ];
 
 export const DECK_SORTS: { id: DeckSort; label: string }[] = [
@@ -99,6 +114,10 @@ function isCatalogSort(value: unknown): value is CatalogSort {
   return value === 'title' || value === 'year' || value === 'added';
 }
 
+function isMtgCollectionSort(value: unknown): value is MtgCollectionSort {
+  return isCatalogSort(value) || value === 'set' || value === 'color' || value === 'qty';
+}
+
 function isDeckSort(value: unknown): value is DeckSort {
   return value === 'title' || value === 'added';
 }
@@ -133,6 +152,15 @@ function parseTabPrefs(value: unknown): TabViewPrefs {
   };
 }
 
+function parseMtgTabPrefs(value: unknown): MtgTabViewPrefs {
+  const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return {
+    layout: isLayout(raw.layout) ? raw.layout : 'grid',
+    sort: isMtgCollectionSort(raw.sort) ? raw.sort : 'title',
+    availability: isAvailability(raw.availability) ? raw.availability : 'all',
+  };
+}
+
 export function parseLibraryView(value: unknown): LibraryViewPrefs {
   const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   const opening = raw.opening === 'resume' || isDockType(raw.opening) ? raw.opening : 'resume';
@@ -144,7 +172,7 @@ export function parseLibraryView(value: unknown): LibraryViewPrefs {
     movies: parseTabPrefs(raw.movies),
     books: parseTabPrefs(raw.books),
     games: parseTabPrefs(raw.games),
-    mtg: parseTabPrefs(raw.mtg),
+    mtg: parseMtgTabPrefs(raw.mtg),
     pokemon: parseTabPrefs(raw.pokemon),
     decks: {
       sort:
@@ -200,11 +228,20 @@ export function moveDockTab(
 export function withTabPrefs(
   prefs: LibraryViewPrefs,
   tab: DockType,
-  patch: Partial<TabViewPrefs>,
+  patch: Partial<{ layout: LibraryLayout; sort: MtgCollectionSort; availability: AvailabilityFilter }>,
 ): LibraryViewPrefs {
+  if (tab === 'mtg') {
+    return { ...prefs, mtg: { ...prefs.mtg, ...patch } };
+  }
+  const current = prefs[tab];
   return {
     ...prefs,
-    [tab]: { ...prefs[tab], ...patch },
+    [tab]: {
+      ...current,
+      ...(patch.layout ? { layout: patch.layout } : {}),
+      ...(patch.availability ? { availability: patch.availability } : {}),
+      sort: patch.sort && isCatalogSort(patch.sort) ? patch.sort : current.sort,
+    },
   };
 }
 
@@ -240,6 +277,61 @@ export function sortCatalog<T>(
     if (sort === 'added') {
       const added = fields.addedAt(b).localeCompare(fields.addedAt(a));
       if (added !== 0) return added;
+    }
+    return compareTitle(fields.title(a), fields.title(b));
+  });
+}
+
+const COLOR_RANK: Record<string, number> = { W: 0, U: 1, B: 2, R: 3, G: 4 };
+
+function colorGroup(identity: string | null): number {
+  if (identity == null) return 8;
+  if (identity.length === 0) return 7;
+  if (identity.length > 1) return 5;
+  return COLOR_RANK[identity] ?? 6;
+}
+
+function collectorValue(value: string | null): number | null {
+  if (!value) return null;
+  const match = value.match(/\d+/);
+  if (!match) return null;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function sortMtgCollection<T>(
+  items: readonly T[],
+  sort: MtgCollectionSort,
+  fields: CatalogFields<T> & {
+    setName: (item: T) => string | null;
+    collectorNumber: (item: T) => string | null;
+    colorIdentity: (item: T) => string | null;
+    qty: (item: T) => number;
+  },
+): T[] {
+  if (sort === 'title' || sort === 'year' || sort === 'added') {
+    return sortCatalog(items, sort, fields);
+  }
+
+  return [...items].sort((a, b) => {
+    if (sort === 'qty') {
+      const qty = fields.qty(b) - fields.qty(a);
+      if (qty !== 0) return qty;
+    }
+    if (sort === 'set') {
+      const set = compareTitle(fields.setName(a) ?? '\uffff', fields.setName(b) ?? '\uffff');
+      if (set !== 0) return set;
+      const an = collectorValue(fields.collectorNumber(a));
+      const bn = collectorValue(fields.collectorNumber(b));
+      if (an == null && bn != null) return 1;
+      if (an != null && bn == null) return -1;
+      if (an != null && bn != null && an !== bn) return an - bn;
+    }
+    if (sort === 'color') {
+      const color = colorGroup(fields.colorIdentity(a)) - colorGroup(fields.colorIdentity(b));
+      if (color !== 0) return color;
+      const identity = (fields.colorIdentity(a) ?? '').localeCompare(fields.colorIdentity(b) ?? '');
+      if (identity !== 0) return identity;
     }
     return compareTitle(fields.title(a), fields.title(b));
   });

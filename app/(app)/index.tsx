@@ -29,19 +29,23 @@ import {
   DeckSort,
   DOCK_LABELS,
   DockType,
+  MTG_COLLECTION_SORTS,
+  MtgCollectionSort,
   resolveOpeningTab,
   sortCatalog,
   sortDecks,
+  sortMtgCollection,
   visibleDockTabs,
   withTabPrefs,
 } from '../../lib/libraryView';
 import { searchMoviesInLibrary } from '../../lib/movies';
-import { MtgCard, searchMtgCollection, updateMtgCardQty } from '../../lib/mtgCards';
+import { attachColorIdentities, MtgCard, searchMtgCollection, updateMtgCardQty } from '../../lib/mtgCards';
 import { listMtgDecks, MtgDeck } from '../../lib/mtgDecks';
 import { isTypeVisible, useProfile } from '../../lib/profile';
 import { canDeleteOwned, isWriter } from '../../lib/roles';
 import { posterUrl, radius, spacing, typeScale, useTheme } from '../../lib/theme';
 import { Movie } from '../../lib/types';
+import { formatLabel } from '../../lib/deckLegality';
 
 type MtgMode = 'collection' | 'decks';
 
@@ -110,7 +114,8 @@ export default function LibraryScreen() {
   const tabPrefs = tab ? profile.libraryView[tab] : profile.libraryView.movies;
   const layout = tabPrefs.layout;
   const availability = tab === 'books' ? profile.libraryView.books.availability : profile.libraryView.movies.availability;
-  const catalogSort: CatalogSort = tab === 'mtg' ? profile.libraryView.mtg.sort : tabPrefs.sort;
+  const mtgSort = profile.libraryView.mtg.sort;
+  const catalogSort: CatalogSort = tab && tab !== 'mtg' ? profile.libraryView[tab].sort : 'title';
   const deckSort = profile.libraryView.decks.sort;
 
   const persist = useCallback(
@@ -137,7 +142,16 @@ export default function LibraryScreen() {
         setBooks(results);
         setCheckouts(await getActiveCheckoutsByItemIds('book', results.map((book) => book.id)));
       } else if (mode === 'collection') {
-        setMtgCards(await searchMtgCollection(searchQuery));
+        const results = await searchMtgCollection(searchQuery);
+        setMtgCards(results);
+        try {
+          const filled = await attachColorIdentities(results, (card) =>
+            household != null && canDeleteOwned(household.role, card.addedBy, user?.id ?? null),
+          );
+          setMtgCards(filled);
+        } catch {
+          // Set, title, and quantity sorts still work if Scryfall is unreachable.
+        }
       } else {
         const decks = await listMtgDecks();
         const trimmed = searchQuery.trim().toLowerCase();
@@ -149,7 +163,7 @@ export default function LibraryScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [household, user?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -218,10 +232,14 @@ export default function LibraryScreen() {
 
   const sortedCards = useMemo(
     () =>
-      sortCatalog(mtgCards, profile.libraryView.mtg.sort, {
+      sortMtgCollection(mtgCards, profile.libraryView.mtg.sort, {
         title: (card) => card.name,
         year: () => null,
         addedAt: (card) => card.addedAt,
+        setName: (card) => card.setName ?? card.setCode,
+        collectorNumber: (card) => card.collectorNumber,
+        colorIdentity: (card) => card.colorIdentity,
+        qty: (card) => card.qty,
       }),
     [mtgCards, profile.libraryView.mtg.sort],
   );
@@ -324,9 +342,10 @@ export default function LibraryScreen() {
   if (tab !== 'mtg' && availability !== 'all') {
     filterBits.push(AVAILABILITY_FILTERS.find((option) => option.id === availability)?.label ?? availability);
   }
-  const activeSort = tab === 'mtg' && mtgMode === 'decks' ? deckSort : catalogSort;
+  const activeSort = tab === 'mtg' && mtgMode === 'decks' ? deckSort : tab === 'mtg' ? mtgSort : catalogSort;
+  const sortOptions = tab === 'mtg' && mtgMode === 'decks' ? DECK_SORTS : tab === 'mtg' ? MTG_COLLECTION_SORTS : CATALOG_SORTS;
   if (activeSort !== 'title') {
-    filterBits.push(activeSort === 'year' ? 'Year' : 'Date added');
+    filterBits.push(sortOptions.find((option) => option.id === activeSort)?.label ?? activeSort);
   }
 
   const listPad = { paddingBottom: spacing.xl + 56 };
@@ -591,7 +610,7 @@ export default function LibraryScreen() {
             title={query ? 'No matches' : 'No decks yet'}
             message={
               writer
-                ? 'Import a commander deck from Archidekt.'
+                ? 'Create a Commander or Standard deck, or import one from Archidekt.'
                 : 'Decks imported by your household will show up here.'
             }
             action={emptyAction}
@@ -612,7 +631,9 @@ export default function LibraryScreen() {
                 <View style={styles.listMeta}>
                   <Text style={[typeScale.body, { color: colors.text, fontWeight: '600' }]}>{item.name}</Text>
                   <Text style={[typeScale.caption, { color: colors.textSecondary }]}>
-                    {item.archidektId ? `Archidekt ${item.archidektId}` : `Added ${new Date(item.createdAt).toLocaleDateString()}`}
+                    {[formatLabel(item.format), item.archidektId ? `Archidekt ${item.archidektId}` : null]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </Text>
                 </View>
                 <Text style={[typeScale.label, { color: colors.accent, fontSize: 14 }]}>Open</Text>
@@ -662,14 +683,18 @@ export default function LibraryScreen() {
           )}
           <FilterChoices
             label="Sort"
-            options={tab === 'mtg' && mtgMode === 'decks' ? DECK_SORTS : CATALOG_SORTS}
-            value={tab === 'mtg' && mtgMode === 'decks' ? deckSort : catalogSort}
+            options={sortOptions}
+            value={activeSort}
             onChange={(next) => {
               if (tab === 'mtg' && mtgMode === 'decks') {
                 void persist({ ...profile.libraryView, decks: { sort: next as DeckSort } });
                 return;
               }
-              if (tab === 'movies' || tab === 'books' || tab === 'mtg') {
+              if (tab === 'mtg') {
+                void persist(withTabPrefs(profile.libraryView, 'mtg', { sort: next as MtgCollectionSort }));
+                return;
+              }
+              if (tab === 'movies' || tab === 'books') {
                 void persist(withTabPrefs(profile.libraryView, tab, { sort: next as CatalogSort }));
               }
             }}
