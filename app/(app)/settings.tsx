@@ -22,7 +22,15 @@ import {
 } from '../../lib/household';
 import { useHousehold } from '../../lib/householdContext';
 import {
+  DOCK_LABELS,
+  LibraryLayout,
+  moveDockTab,
+  visibleDockTabs,
+  withTabPrefs,
+} from '../../lib/libraryView';
+import {
   householdShows,
+  isTypeVisible,
   MediaType,
   useProfile,
 } from '../../lib/profile';
@@ -49,7 +57,7 @@ export default function SettingsScreen() {
   const { showToast } = useToast();
   const { user, updateEmail, updatePassword, deleteAccount } = useAuth();
   const { household, refresh: refreshHousehold } = useHousehold();
-  const { profile, saveDisplayName, saveAppearance, savePersonalHide } = useProfile();
+  const { profile, saveDisplayName, saveAppearance, savePersonalHide, saveLibraryView } = useProfile();
   const [name, setName] = useState(profile.displayName ?? '');
   const [savingName, setSavingName] = useState(false);
   const [email, setEmail] = useState('');
@@ -102,6 +110,21 @@ export default function SettingsScreen() {
       await savePersonalHide(next);
     } catch (error) {
       Alert.alert('Could not update your tabs', errorMessage(error, 'Try again.'));
+    }
+  };
+
+  const visibleDock = household
+    ? visibleDockTabs(profile.libraryView.dockOrder, (type) => {
+        if (type === 'games' || type === 'pokemon') return false;
+        return isTypeVisible(household, profile, type);
+      })
+    : [];
+
+  const saveView = async (next: typeof profile.libraryView) => {
+    try {
+      await saveLibraryView(next);
+    } catch (error) {
+      Alert.alert('Could not save library view', errorMessage(error, 'Try again.'));
     }
   };
 
@@ -315,6 +338,172 @@ export default function SettingsScreen() {
           )}
         </View>
 
+        {household ? (
+          <View style={styles.section}>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>Library view</Text>
+            <Text style={[styles.hint, { color: colors.textTertiary }]}>
+              Opening tab, dock order, layout, and density stay on your account. Sort and filters
+              are remembered from the library.
+            </Text>
+            <Text style={[styles.rowTitle, { color: colors.text }]}>Opening tab</Text>
+            <View style={styles.choices}>
+              {(['resume', ...visibleDock] as const).map((option) => {
+                const active = profile.libraryView.opening === option;
+                const label = option === 'resume' ? 'Resume' : DOCK_LABELS[option];
+                return (
+                  <Pressable
+                    key={option}
+                    onPress={() => void saveView({ ...profile.libraryView, opening: option })}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    style={[
+                      styles.choice,
+                      {
+                        backgroundColor: active ? colors.accentMuted : colors.surface,
+                        borderColor: active ? colors.accent : colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: active ? colors.accent : colors.text, fontWeight: '700' }}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {profile.libraryView.opening !== 'resume' &&
+            !visibleDock.includes(profile.libraryView.opening) ? (
+              <Text style={[styles.hint, { color: colors.textTertiary }]}>
+                That tab is hidden, so the library opens on the first tab in your dock.
+              </Text>
+            ) : null}
+
+            <Text style={[styles.rowTitle, { color: colors.text }]}>Density</Text>
+            <View style={styles.choices}>
+              {(
+                [
+                  ['comfortable', 'Comfortable'],
+                  ['compact', 'Compact'],
+                ] as const
+              ).map(([id, label]) => {
+                const active = profile.libraryView.density === id;
+                return (
+                  <Pressable
+                    key={id}
+                    onPress={() => void saveView({ ...profile.libraryView, density: id })}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    style={[
+                      styles.choice,
+                      {
+                        backgroundColor: active ? colors.accentMuted : colors.surface,
+                        borderColor: active ? colors.accent : colors.border,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: active ? colors.accent : colors.text, fontWeight: '700' }}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {visibleDock.length > 1 ? (
+              <>
+                <Text style={[styles.rowTitle, { color: colors.text }]}>Dock order</Text>
+                {visibleDock.map((type, index) => (
+                  <View
+                    key={type}
+                    style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  >
+                    <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>{DOCK_LABELS[type]}</Text>
+                    <Pressable
+                      disabled={index === 0}
+                      onPress={() =>
+                        void saveView({
+                          ...profile.libraryView,
+                          dockOrder: moveDockTab(profile.libraryView.dockOrder, visibleDock, type, -1),
+                        })
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Move ${DOCK_LABELS[type]} up`}
+                      style={styles.nudge}
+                    >
+                      <Text style={{ color: index === 0 ? colors.textTertiary : colors.accent, fontWeight: '700' }}>
+                        Up
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={index === visibleDock.length - 1}
+                      onPress={() =>
+                        void saveView({
+                          ...profile.libraryView,
+                          dockOrder: moveDockTab(profile.libraryView.dockOrder, visibleDock, type, 1),
+                        })
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`Move ${DOCK_LABELS[type]} down`}
+                      style={styles.nudge}
+                    >
+                      <Text
+                        style={{
+                          color: index === visibleDock.length - 1 ? colors.textTertiary : colors.accent,
+                          fontWeight: '700',
+                        }}
+                      >
+                        Down
+                      </Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </>
+            ) : null}
+
+            {visibleDock.map((type) => (
+              <View key={`layout-${type}`} style={styles.section}>
+                <Text style={[styles.rowTitle, { color: colors.text }]}>
+                  {type === 'mtg' ? 'MTG collection layout' : `${DOCK_LABELS[type]} layout`}
+                </Text>
+                <View style={styles.choices}>
+                  {(
+                    [
+                      ['grid', 'Grid'],
+                      ['list', 'List'],
+                    ] as const
+                  ).map(([id, label]) => {
+                    const active = profile.libraryView[type].layout === id;
+                    return (
+                      <Pressable
+                        key={id}
+                        onPress={() =>
+                          void saveView(withTabPrefs(profile.libraryView, type, { layout: id as LibraryLayout }))
+                        }
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        style={[
+                          styles.choice,
+                          {
+                            backgroundColor: active ? colors.accentMuted : colors.surface,
+                            borderColor: active ? colors.accent : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: active ? colors.accent : colors.text, fontWeight: '700' }}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ))}
+            <Text style={[styles.hint, { color: colors.textTertiary }]}>
+              Decks stay a list. Grid and list both use the density above.
+            </Text>
+          </View>
+        ) : null}
+
         {isAdmin && household ? (
           <View style={styles.section}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>Household library</Text>
@@ -464,6 +653,7 @@ const styles = StyleSheet.create({
   },
   choices: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   choice: {
@@ -471,6 +661,13 @@ const styles = StyleSheet.create({
     minHeight: 44,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  nudge: {
+    minWidth: 44,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

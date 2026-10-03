@@ -7,9 +7,20 @@ interface SearchInputProps {
   onChangeText: (text: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  accessibilityLabel?: string;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
-export function SearchInput({ value, onChangeText, placeholder = 'Search', autoFocus }: SearchInputProps) {
+export function SearchInput({
+  value,
+  onChangeText,
+  placeholder = 'Search',
+  autoFocus,
+  accessibilityLabel = 'Search',
+  onFocus,
+  onBlur,
+}: SearchInputProps) {
   const { colors } = useTheme();
 
   return (
@@ -20,6 +31,9 @@ export function SearchInput({ value, onChangeText, placeholder = 'Search', autoF
         placeholder={placeholder}
         placeholderTextColor={colors.placeholder}
         autoFocus={autoFocus}
+        accessibilityLabel={accessibilityLabel}
+        onFocus={onFocus}
+        onBlur={onBlur}
         autoCapitalize="none"
         autoCorrect={false}
         clearButtonMode="while-editing"

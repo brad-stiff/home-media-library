@@ -8,16 +8,17 @@ interface MovieGridItemProps {
   movie: Movie;
   onPress: () => void;
   checkoutLabel?: string | null;
+  compact?: boolean;
 }
 
-export function MovieGridItem({ movie, onPress, checkoutLabel }: MovieGridItemProps) {
+export function MovieGridItem({ movie, onPress, checkoutLabel, compact = false }: MovieGridItemProps) {
   const { colors } = useTheme();
   const ownership = formatOwnershipLabel(movie);
 
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.container, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.container, compact && styles.compact, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={`${movie.title}, ${movie.year ?? 'unknown year'}, ${ownership}${
         checkoutLabel ? `, checked out to ${checkoutLabel}` : ''
@@ -34,7 +35,7 @@ export function MovieGridItem({ movie, onPress, checkoutLabel }: MovieGridItemPr
         ) : null}
       </View>
       <View style={styles.meta}>
-        <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
+        <Text style={[styles.title, compact && styles.compactTitle, { color: colors.text }]} numberOfLines={2}>
           {movie.title}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]} numberOfLines={1}>
@@ -50,6 +51,13 @@ const styles = StyleSheet.create({
     flex: 1,
     margin: spacing.sm,
     maxWidth: '50%',
+  },
+  compact: {
+    margin: spacing.xs,
+  },
+  compactTitle: {
+    fontSize: 13,
+    lineHeight: 16,
   },
   pressed: {
     opacity: 0.85,

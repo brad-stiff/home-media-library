@@ -12,6 +12,7 @@ import {
 import { AppearanceContext, AppearancePreference } from './appearanceContext';
 import { useAuth } from './auth';
 import { HouseholdMembership } from './household';
+import { LibraryViewPrefs, parseLibraryView, defaultLibraryView } from './libraryView';
 import { supabase } from './supabase';
 
 export type MediaType = 'movies' | 'books' | 'mtg';
@@ -22,6 +23,7 @@ export type UserProfile = {
   hideMovies: boolean;
   hideBooks: boolean;
   hideMtg: boolean;
+  libraryView: LibraryViewPrefs;
 };
 
 type PersonalHide = Pick<UserProfile, 'hideMovies' | 'hideBooks' | 'hideMtg'>;
@@ -33,6 +35,7 @@ type ProfileContextValue = {
   saveDisplayName: (name: string) => Promise<void>;
   saveAppearance: (appearance: AppearancePreference) => Promise<void>;
   savePersonalHide: (hide: PersonalHide) => Promise<void>;
+  saveLibraryView: (libraryView: LibraryViewPrefs) => Promise<void>;
 };
 
 const DEFAULT_PROFILE: UserProfile = {
@@ -41,6 +44,7 @@ const DEFAULT_PROFILE: UserProfile = {
   hideMovies: false,
   hideBooks: false,
   hideMtg: false,
+  libraryView: defaultLibraryView(),
 };
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
@@ -59,6 +63,7 @@ function rowToProfile(row: {
   hide_movies: boolean | null;
   hide_books: boolean | null;
   hide_mtg: boolean | null;
+  library_view: unknown;
 }): UserProfile {
   return {
     displayName: row.display_name,
@@ -66,6 +71,7 @@ function rowToProfile(row: {
     hideMovies: row.hide_movies ?? false,
     hideBooks: row.hide_books ?? false,
     hideMtg: row.hide_mtg ?? false,
+    libraryView: parseLibraryView(row.library_view),
   };
 }
 
@@ -105,7 +111,7 @@ export function ProfileProvider({ children }: PropsWithChildren) {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('display_name, appearance, hide_movies, hide_books, hide_mtg')
+      .select('display_name, appearance, hide_movies, hide_books, hide_mtg, library_view')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -184,6 +190,21 @@ export function ProfileProvider({ children }: PropsWithChildren) {
     [profile.hideBooks, profile.hideMovies, profile.hideMtg, user],
   );
 
+  const saveLibraryView = useCallback(
+    async (libraryView: LibraryViewPrefs) => {
+      if (!user) throw new Error('Not signed in');
+      const previous = profile.libraryView;
+      setProfile((prev) => ({ ...prev, libraryView }));
+
+      const { error } = await supabase.from('profiles').update({ library_view: libraryView }).eq('id', user.id);
+      if (error) {
+        setProfile((prev) => ({ ...prev, libraryView: previous }));
+        throw error;
+      }
+    },
+    [profile.libraryView, user],
+  );
+
   const value = useMemo(
     () => ({
       profile,
@@ -192,8 +213,9 @@ export function ProfileProvider({ children }: PropsWithChildren) {
       saveDisplayName,
       saveAppearance,
       savePersonalHide,
+      saveLibraryView,
     }),
-    [profile, loading, refresh, saveDisplayName, saveAppearance, savePersonalHide],
+    [profile, loading, refresh, saveDisplayName, saveAppearance, savePersonalHide, saveLibraryView],
   );
 
   return (

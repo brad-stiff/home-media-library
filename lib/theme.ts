@@ -73,3 +73,10 @@ export const radius = {
   lg: 16,
   xl: 24,
 } as const;
+
+export const typeScale = {
+  title: { fontSize: 20, lineHeight: 26, fontWeight: '700' as const },
+  body: { fontSize: 16, lineHeight: 22, fontWeight: '400' as const },
+  caption: { fontSize: 13, lineHeight: 18, fontWeight: '400' as const },
+  label: { fontSize: 12, lineHeight: 16, fontWeight: '600' as const },
+} as const;

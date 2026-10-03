@@ -47,13 +47,13 @@ export function ToastProvider({ children }: PropsWithChildren) {
         {children}
         {toast ? (
           <View
-            pointerEvents="none"
             style={[
               styles.banner,
               {
                 bottom: insets.bottom + spacing.md,
                 backgroundColor: colors.surfaceElevated,
                 borderColor: toast.tone === 'error' ? colors.danger : colors.border,
+                pointerEvents: 'none',
               },
             ]}
           >

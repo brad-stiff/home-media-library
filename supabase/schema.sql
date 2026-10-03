@@ -12,6 +12,7 @@ create table public.profiles (
   hide_movies boolean not null default false,
   hide_books boolean not null default false,
   hide_mtg boolean not null default false,
+  library_view jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -2086,3 +2087,13 @@ revoke all on function public.set_household_media(boolean, boolean, boolean) fro
 revoke all on function public.delete_own_account() from public, anon;
 grant execute on function public.set_household_media(boolean, boolean, boolean) to authenticated;
 grant execute on function public.delete_own_account() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Phase 10 — per-user library view
+-- Safe to run on a database that already has Phases 1–9.
+-- library_view stores opening tab, dock order, density, and per-tab layout,
+-- sort, and availability. The app ignores types that are still hidden.
+-- ---------------------------------------------------------------------------
+
+alter table public.profiles
+  add column if not exists library_view jsonb not null default '{}'::jsonb;
