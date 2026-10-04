@@ -13,6 +13,7 @@ import {
 
 import { ApiCredit } from '../../components/ApiCredit';
 import { EmptyState } from '../../components/EmptyState';
+import { HeaderMenu, HeaderMenuItem } from '../../components/HeaderMenu';
 import { FilterChoices, LibraryDock } from '../../components/LibraryDock';
 import { FabAction, LibraryFab } from '../../components/LibraryFab';
 import { MovieGridItem } from '../../components/MovieGridItem';
@@ -185,27 +186,22 @@ export default function LibraryScreen() {
     }, [load, query, tab, mtgMode, profileLoading, household, visible]),
   );
 
+  const menuItems = useMemo(() => {
+    const items: HeaderMenuItem[] = [{ label: 'Household', onPress: () => router.push('/household') }];
+    if (lendingOn) items.push({ label: 'Loans', onPress: () => router.push('/loans') });
+    items.push(
+      { label: 'Contacts', onPress: () => router.push('/contacts') },
+      { label: 'Settings', onPress: () => router.push('/settings') },
+    );
+    return items;
+  }, [lendingOn, router]);
+
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerLeft: () => (
-        <Pressable onPress={() => router.push('/household')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Household">
-          <Text style={{ color: colors.accent, fontWeight: '600' }}>Household</Text>
-        </Pressable>
-      ),
-      headerRight: () => (
-        <View style={{ flexDirection: 'row', gap: spacing.md }}>
-          {lendingOn ? (
-            <Pressable onPress={() => router.push('/loans')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Loans">
-              <Text style={{ color: colors.accent, fontWeight: '600' }}>Loans</Text>
-            </Pressable>
-          ) : null}
-          <Pressable onPress={() => router.push('/settings')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Settings">
-            <Text style={{ color: colors.accent, fontWeight: '600' }}>Settings</Text>
-          </Pressable>
-        </View>
-      ),
+      headerLeft: () => null,
+      headerRight: () => <HeaderMenu items={menuItems} />,
     });
-  }, [navigation, router, colors.accent, lendingOn]);
+  }, [navigation, menuItems]);
 
   const selectTab = (next: DockType) => {
     setTab(next);
