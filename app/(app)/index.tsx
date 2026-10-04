@@ -16,6 +16,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { FilterChoices, LibraryDock } from '../../components/LibraryDock';
 import { FabAction, LibraryFab } from '../../components/LibraryFab';
 import { MovieGridItem } from '../../components/MovieGridItem';
+import { MtgCardImage } from '../../components/MtgCardImage';
 import { SearchInput } from '../../components/SearchInput';
 import { Book, searchBooksInLibrary } from '../../lib/books';
 import { Checkout, getActiveCheckoutsByItemIds } from '../../lib/checkouts';
@@ -557,11 +558,12 @@ export default function LibraryScreen() {
               renderItem={({ item }) =>
                 layout === 'grid' ? (
                   <View style={[styles.bookItem, compact && styles.bookItemCompact]}>
-                    {item.imageUri ? (
-                      <Image source={{ uri: item.imageUri }} style={styles.bookCover} contentFit="cover" />
-                    ) : (
-                      <View style={[styles.bookCover, { backgroundColor: colors.surfaceElevated }]} />
-                    )}
+                    <MtgCardImage
+                      uri={item.imageUri}
+                      foil={item.foil}
+                      style={styles.bookCover}
+                      placeholderColor={colors.surfaceElevated}
+                    />
                     <Text style={[styles.bookTitle, { color: colors.text }]} numberOfLines={2}>
                       {item.name}
                       {item.foil ? ' ★' : ''}
@@ -582,11 +584,12 @@ export default function LibraryScreen() {
                   </View>
                 ) : (
                   <View style={[styles.mtgRow, compact && styles.listRowCompact, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    {item.imageUri ? (
-                      <Image source={{ uri: item.imageUri }} style={styles.mtgThumb} contentFit="cover" />
-                    ) : (
-                      <View style={[styles.mtgThumb, { backgroundColor: colors.surfaceElevated }]} />
-                    )}
+                    <MtgCardImage
+                      uri={item.imageUri}
+                      foil={item.foil}
+                      style={styles.mtgThumb}
+                      placeholderColor={colors.surfaceElevated}
+                    />
                     <View style={styles.listMeta}>
                       <Text style={[typeScale.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
                         {item.name}

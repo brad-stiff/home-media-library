@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -13,6 +12,7 @@ import {
 } from 'react-native';
 
 import { ApiCredit } from '../../../components/ApiCredit';
+import { MtgCardImage } from '../../../components/MtgCardImage';
 import { MediaGate } from '../../../components/MediaGate';
 import { SearchInput } from '../../../components/SearchInput';
 import { WriterOnly } from '../../../components/WriterOnly';
@@ -101,11 +101,12 @@ function AddMtgCardScreen() {
                 disabled={savingId === item.id}
                 style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
               >
-                {image ? (
-                  <Image source={{ uri: image }} style={styles.thumb} contentFit="cover" />
-                ) : (
-                  <View style={[styles.thumb, { backgroundColor: colors.surfaceElevated }]} />
-                )}
+                <MtgCardImage
+                  uri={image}
+                  foil={foil}
+                  style={styles.thumb}
+                  placeholderColor={colors.surfaceElevated}
+                />
                 <View style={styles.meta}>
                   <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
                     {item.name}

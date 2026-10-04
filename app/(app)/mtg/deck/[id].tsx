@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -12,8 +11,10 @@ import {
   View,
 } from 'react-native';
 
+import { ActionMenu, ActionMenuItem } from '../../../../components/ActionMenu';
 import { ApiCredit } from '../../../../components/ApiCredit';
 import { FilterChoices } from '../../../../components/LibraryDock';
+import { MtgCardImage } from '../../../../components/MtgCardImage';
 import { PrimaryButton } from '../../../../components/PrimaryButton';
 import { fetchArchidektDeck } from '../../../../lib/archidekt';
 import { useAuth } from '../../../../lib/auth';
@@ -113,6 +114,7 @@ export default function MtgDeckDetailScreen() {
   const [deleting, setDeleting] = useState(false);
   const [resyncing, setResyncing] = useState(false);
   const [busyCardId, setBusyCardId] = useState<string | null>(null);
+  const [cardMenu, setCardMenu] = useState<{ title: string; actions: ActionMenuItem[] } | null>(null);
   const [rulesReady, setRulesReady] = useState(false);
 
   const load = useCallback(async () => {
@@ -261,26 +263,28 @@ export default function MtgDeckDetailScreen() {
           ? (['main', 'sideboard', 'maybeboard'] as const)
           : destinations;
 
-    Alert.alert(card.name, undefined, [
-      ...misplaced.map((board) => ({
-        text: board === 'commander' ? 'Set as commander' : `Move to ${boardLabel(board).toLowerCase()}`,
-        onPress: () => void runCard(card.id, () => moveDeckCard(card, board)),
-      })),
-      ...(writer
-        ? [
-            {
-              text: 'Add to collection',
-              onPress: () => pullIntoCollection(card),
-            },
-          ]
-        : []),
-      {
-        text: 'Remove from deck',
-        style: 'destructive' as const,
-        onPress: () => void runCard(card.id, () => removeDeckCard(card.id)),
-      },
-      { text: 'Cancel', style: 'cancel' as const },
-    ]);
+    setCardMenu({
+      title: card.name,
+      actions: [
+        ...misplaced.map((board) => ({
+          label: board === 'commander' ? 'Set as commander' : `Move to ${boardLabel(board).toLowerCase()}`,
+          onPress: () => void runCard(card.id, () => moveDeckCard(card, board)),
+        })),
+        ...(writer
+          ? [
+              {
+                label: 'Add to collection',
+                onPress: () => pullIntoCollection(card),
+              },
+            ]
+          : []),
+        {
+          label: 'Remove from deck',
+          destructive: true,
+          onPress: () => void runCard(card.id, () => removeDeckCard(card.id)),
+        },
+      ],
+    });
   };
 
   const handleResync = () => {
@@ -437,11 +441,12 @@ export default function MtgDeckDetailScreen() {
         )}
         renderItem={({ item }) => (
           <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            {item.imageUri ? (
-              <Image source={{ uri: item.imageUri }} style={styles.thumb} contentFit="cover" />
-            ) : (
-              <View style={[styles.thumb, { backgroundColor: colors.surfaceElevated }]} />
-            )}
+            <MtgCardImage
+              uri={item.imageUri}
+              foil={item.foil}
+              style={styles.thumb}
+              placeholderColor={colors.surfaceElevated}
+            />
             <View style={styles.metaCol}>
               <Text style={[styles.name, { color: colors.text }]} numberOfLines={2}>
                 {item.name}
@@ -497,6 +502,11 @@ export default function MtgDeckDetailScreen() {
             </View>
           </View>
         )}
+      />
+      <ActionMenu
+        title={cardMenu?.title ?? ''}
+        actions={cardMenu?.actions ?? null}
+        onClose={() => setCardMenu(null)}
       />
     </>
   );
