@@ -9,7 +9,8 @@ function AppNavigator() {
   const { colors } = useTheme();
   const segments = useSegments();
   const leaf = segments[segments.length - 1];
-  const openWithoutHousehold = leaf === 'gate' || leaf === 'join' || leaf === 'settings';
+  const openWithoutHousehold =
+    leaf === 'gate' || leaf === 'join' || leaf === 'settings' || leaf === 'account' || leaf === 'about';
 
   if (loading) {
     return (
@@ -50,6 +51,8 @@ function AppNavigator() {
         <Stack.Screen name="contacts/from-phone" options={{ title: 'From your phone' }} />
         <Stack.Screen name="loans" options={{ title: 'Loans' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+        <Stack.Screen name="account" options={{ title: 'Account' }} />
+        <Stack.Screen name="about" options={{ title: 'About' }} />
         <Stack.Screen name="scan/index" options={{ title: 'Scan', presentation: 'fullScreenModal' }} />
         <Stack.Screen name="scan/confirm-book" options={{ title: 'Add Book' }} />
         <Stack.Screen name="scan/confirm-movie" options={{ title: 'Add Movie' }} />

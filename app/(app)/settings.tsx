@@ -1,5 +1,4 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -12,10 +11,7 @@ import {
   View,
 } from 'react-native';
 
-import { AuthTextField } from '../../components/AuthForm';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { useAuth } from '../../lib/auth';
-import { API_CREDITS } from '../../lib/credits';
 import {
   errorMessage,
   setHouseholdLending,
@@ -53,39 +49,13 @@ const MEDIA: { id: MediaType; label: string }[] = [
 ];
 
 export default function SettingsScreen() {
-  const router = useRouter();
   const { colors } = useTheme();
   const { showToast } = useToast();
-  const { user, updateEmail, updatePassword, deleteAccount } = useAuth();
   const { household, refresh: refreshHousehold } = useHousehold();
-  const { profile, saveDisplayName, saveAppearance, savePersonalHide, saveLibraryView } = useProfile();
-  const [name, setName] = useState(profile.displayName ?? '');
-  const [savingName, setSavingName] = useState(false);
-  const [email, setEmail] = useState('');
-  const [savingEmail, setSavingEmail] = useState(false);
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [savingPassword, setSavingPassword] = useState(false);
+  const { profile, saveAppearance, savePersonalHide, saveLibraryView } = useProfile();
   const [exporting, setExporting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  useEffect(() => {
-    setName(profile.displayName ?? '');
-  }, [profile.displayName]);
 
   const isAdmin = household?.role === 'admin';
-
-  const handleSaveName = async () => {
-    setSavingName(true);
-    try {
-      await saveDisplayName(name);
-      showToast('Display name saved');
-    } catch (error) {
-      Alert.alert('Could not save name', errorMessage(error, 'Try again.'));
-    } finally {
-      setSavingName(false);
-    }
-  };
 
   const handleAppearance = async (appearance: AppearancePreference) => {
     if (appearance === profile.appearance) return;
@@ -170,112 +140,12 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleEmail = async () => {
-    if (!email.trim()) {
-      showToast('Enter a new email.', 'error');
-      return;
-    }
-    setSavingEmail(true);
-    try {
-      await updateEmail(email);
-      setEmail('');
-      showToast('Check the new email to confirm the change');
-    } catch (error) {
-      Alert.alert('Could not change email', errorMessage(error, 'Try again.'));
-    } finally {
-      setSavingEmail(false);
-    }
-  };
-
-  const handlePassword = async () => {
-    if (password.length < 6) {
-      showToast('Use at least 6 characters.', 'error');
-      return;
-    }
-    if (password !== confirmPassword) {
-      showToast('Enter the same password in both fields.', 'error');
-      return;
-    }
-    setSavingPassword(true);
-    try {
-      await updatePassword(password);
-      setPassword('');
-      setConfirmPassword('');
-      showToast('Password updated');
-    } catch (error) {
-      Alert.alert('Could not change password', errorMessage(error, 'Try again.'));
-    } finally {
-      setSavingPassword(false);
-    }
-  };
-
-  const handleDelete = () => {
-    if (household) {
-      Alert.alert(
-        'Leave your household first',
-        'Account deletion is available after you leave. If you are the only admin, transfer admin before leaving. If you are the last member, leaving asks you to save a backup and then deletes the household.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Leave household',
-            onPress: () => router.push('/household/confirm-departure?intent=leave'),
-          },
-        ],
-      );
-      return;
-    }
-
-    Alert.alert(
-      'Delete account?',
-      'This removes your login. Items you added stay in any former household and show Deleted account. You cannot sign in again.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete account',
-          style: 'destructive',
-          onPress: () => {
-            setDeleting(true);
-            void (async () => {
-              try {
-                await deleteAccount();
-              } catch (error) {
-                setDeleting(false);
-                Alert.alert('Could not delete account', errorMessage(error, 'Try again.'));
-              }
-            })();
-          },
-        },
-      ],
-    );
-  };
-
   return (
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Display name</Text>
-          <Text style={[styles.hint, { color: colors.textTertiary }]}>
-            Shown on the household member list.
-          </Text>
-          <AuthTextField
-            label="Name"
-            value={name}
-            onChangeText={setName}
-            autoComplete="name"
-            textContentType="name"
-            maxLength={80}
-          />
-          <PrimaryButton
-            label="Save name"
-            onPress={handleSaveName}
-            loading={savingName}
-            disabled={name.trim() === (profile.displayName ?? '').trim() || name.trim().length < 1}
-          />
-        </View>
-
         <View style={styles.section}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>Appearance</Text>
           <Text style={[styles.hint, { color: colors.textTertiary }]}>
@@ -544,17 +414,6 @@ export default function SettingsScreen() {
           </View>
         ) : null}
 
-        {household ? (
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Contacts</Text>
-            <Text style={[styles.hint, { color: colors.textTertiary }]}>
-              People outside this household. Checkout picks a contact, and an email can link an
-              existing account or invite them to create one.
-            </Text>
-            <PrimaryButton label="Contacts" onPress={() => router.push('/contacts')} />
-          </View>
-        ) : null}
-
         {isAdmin && household ? (
           <View style={styles.section}>
             <Text style={[styles.label, { color: colors.textSecondary }]}>Checkout</Text>
@@ -581,16 +440,6 @@ export default function SettingsScreen() {
         ) : null}
 
         <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>About</Text>
-          {API_CREDITS.map((credit) => (
-            <View key={credit.id} style={styles.credit}>
-              <Text style={[styles.rowTitle, { color: colors.text }]}>{credit.name}</Text>
-              <Text style={[styles.hint, { color: colors.textSecondary }]}>{credit.notice}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.section}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>Export library</Text>
           <Text style={[styles.hint, { color: colors.textTertiary }]}>
             Share a JSON backup of movies, books, MTG cards, decks, checkouts, and contacts. Sharing
@@ -607,70 +456,6 @@ export default function SettingsScreen() {
               Join a household to export its library.
             </Text>
           ) : null}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Email</Text>
-          <Text style={[styles.hint, { color: colors.textSecondary }]}>
-            {user?.email ?? 'Signed in'}
-          </Text>
-          <AuthTextField
-            label="New email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            textContentType="emailAddress"
-          />
-          <PrimaryButton
-            label="Change email"
-            onPress={handleEmail}
-            loading={savingEmail}
-            disabled={email.trim().length < 3}
-          />
-          <Text style={[styles.hint, { color: colors.textTertiary }]}>
-            A confirmation link goes to the new address. The email changes after you open it.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Password</Text>
-          <AuthTextField
-            label="New password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            textContentType="newPassword"
-          />
-          <AuthTextField
-            label="Confirm password"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-            textContentType="newPassword"
-          />
-          <PrimaryButton
-            label="Change password"
-            onPress={handlePassword}
-            loading={savingPassword}
-            disabled={password.length < 6 || confirmPassword.length < 6}
-          />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Account</Text>
-          <Text style={[styles.hint, { color: colors.textTertiary }]}>
-            {household
-              ? 'Leave the household before deleting this login. Items you added stay behind and show Deleted account.'
-              : 'This login is not in a household. Deleting it is permanent.'}
-          </Text>
-          <PrimaryButton
-            label="Delete account"
-            onPress={handleDelete}
-            loading={deleting}
-            variant="danger"
-          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -732,8 +517,5 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 16,
     fontWeight: '600',
-  },
-  credit: {
-    gap: 2,
   },
 });

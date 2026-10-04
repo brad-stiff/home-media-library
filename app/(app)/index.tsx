@@ -192,6 +192,8 @@ export default function LibraryScreen() {
     items.push(
       { label: 'Contacts', onPress: () => router.push('/contacts') },
       { label: 'Settings', onPress: () => router.push('/settings') },
+      { label: 'Account', onPress: () => router.push('/account') },
+      { label: 'About', onPress: () => router.push('/about') },
     );
     return items;
   }, [lendingOn, router]);

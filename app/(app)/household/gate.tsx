@@ -96,6 +96,8 @@ export default function HouseholdGateScreen() {
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
         <PrimaryButton label="Settings" onPress={() => router.push('/settings')} />
+        <PrimaryButton label="Account" onPress={() => router.push('/account')} />
+        <PrimaryButton label="About" onPress={() => router.push('/about')} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
