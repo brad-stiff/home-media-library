@@ -1,13 +1,31 @@
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { EmptyState } from '../../../components/EmptyState';
 import { Contact, listContacts } from '../../../lib/contacts';
+import {
+  clearDeviceContact,
+  planDeviceImport,
+  prepareDeviceContact,
+  stageDeviceContact,
+} from '../../../lib/deviceContact';
+import { finishDeviceContactImport, openDeviceContactForm } from '../../../lib/deviceContactFlow';
+import { pickDeviceContactFields } from '../../../lib/deviceContactPicker';
 import { errorMessage } from '../../../lib/household';
 import { useHousehold } from '../../../lib/householdContext';
 import { isWriter } from '../../../lib/roles';
 import { radius, spacing, useTheme } from '../../../lib/theme';
+import { useToast } from '../../../lib/toast';
 
 function contactLine(contact: Contact): string {
   const parts = [contact.email ?? 'No email'];
@@ -19,27 +37,59 @@ function contactLine(contact: Contact): string {
 export default function ContactsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const { household } = useHousehold();
   const writer = household ? isWriter(household.role) : false;
+  const canImport = writer && Platform.OS !== 'web';
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const hasLoaded = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
     try {
       setContacts(await listContacts());
     } catch (error) {
       Alert.alert('Could not load contacts', errorMessage(error, 'Try again.'));
     } finally {
-      setLoading(false);
+      if (!quiet) setLoading(false);
     }
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      void load();
+      void load(hasLoaded.current);
+      hasLoaded.current = true;
     }, [load]),
   );
+
+  const addFromPhone = async () => {
+    if (importing) return;
+    setImporting(true);
+    try {
+      const fields = await pickDeviceContactFields();
+      if (!fields) return;
+      const prepared = prepareDeviceContact(fields);
+      const plan = planDeviceImport(prepared);
+      if (plan.kind === 'choose') {
+        stageDeviceContact(prepared);
+        router.push('/contacts/from-phone');
+        return;
+      }
+      if (plan.kind === 'form') {
+        openDeviceContactForm(router, plan.draft, plan.held);
+        return;
+      }
+      const outcome = await finishDeviceContactImport(plan.draft, router, showToast);
+      if (outcome === 'saved') await load(true);
+    } catch (error) {
+      clearDeviceContact();
+      Alert.alert('Could not open contacts', errorMessage(error, 'Allow contacts access, then try again.'));
+    } finally {
+      setImporting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -51,11 +101,37 @@ export default function ContactsScreen() {
 
   return (
     <View style={styles.container}>
+      {writer ? (
+        <View style={styles.actions}>
+          <Pressable
+            onPress={() => router.push('/contacts/edit')}
+            accessibilityRole="button"
+            accessibilityLabel="Add contact"
+            style={styles.add}
+          >
+            <Text style={{ color: colors.accent, fontWeight: '700' }}>Add contact</Text>
+          </Pressable>
+          {canImport ? (
+            <Pressable
+              onPress={() => void addFromPhone()}
+              disabled={importing}
+              accessibilityRole="button"
+              accessibilityLabel="Add from phone"
+              style={styles.add}
+            >
+              {importing ? (
+                <ActivityIndicator color={colors.accent} />
+              ) : (
+                <Text style={{ color: colors.accent, fontWeight: '700' }}>Add from phone</Text>
+              )}
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {contacts.length === 0 ? (
         <EmptyState
           title="No contacts yet"
           message="Contacts are people outside this household. Checkout uses this list instead of a typed name."
-          action={writer ? { label: 'Add contact', onPress: () => router.push('/contacts/edit') } : undefined}
         />
       ) : (
         <FlatList
@@ -63,16 +139,7 @@ export default function ContactsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           ListHeaderComponent={
-            writer ? (
-              <Pressable
-                onPress={() => router.push('/contacts/edit')}
-                accessibilityRole="button"
-                accessibilityLabel="Add contact"
-                style={styles.add}
-              >
-                <Text style={{ color: colors.accent, fontWeight: '700' }}>Add contact</Text>
-              </Pressable>
-            ) : (
+            writer ? null : (
               <Text style={[styles.hint, { color: colors.textTertiary }]}>
                 Viewers can see contacts. Members and admins can change them.
               </Text>
@@ -98,6 +165,7 @@ export default function ContactsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  actions: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.xs },
   list: { padding: spacing.lg, gap: spacing.sm },
   add: { minHeight: 44, justifyContent: 'center' },
   row: {

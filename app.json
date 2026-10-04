@@ -10,7 +10,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Allow Home Media Library to scan barcodes on discs and books."
+        "NSCameraUsageDescription": "Allow Home Media Library to scan barcodes on discs and books.",
+        "NSContactsUsageDescription": "Allow Home Media Library to copy a contact you choose into this household."
       }
     },
     "android": {
@@ -33,6 +34,12 @@
         {
           "cameraPermission": "Allow Home Media Library to scan barcodes on discs and books.",
           "barcodeScannerEnabled": true
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Allow Home Media Library to copy a contact you choose into this household."
         }
       ]
     ]

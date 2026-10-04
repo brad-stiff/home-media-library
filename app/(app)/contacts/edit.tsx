@@ -29,19 +29,31 @@ import { isWriter } from '../../../lib/roles';
 import { radius, spacing, useTheme } from '../../../lib/theme';
 import { useToast } from '../../../lib/toast';
 
+function searchParam(value: string | string[] | undefined): string {
+  return typeof value === 'string' ? value : '';
+}
+
 export default function ContactEditScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
-  const contactId = typeof id === 'string' ? id : null;
+  const params = useLocalSearchParams<{
+    id?: string;
+    draftName?: string;
+    draftEmail?: string;
+    draftPhone?: string;
+    held?: string;
+  }>();
+  const contactId = typeof params.id === 'string' ? params.id : null;
+  const openedFromPhone = !contactId && searchParam(params.held) !== '';
   const router = useRouter();
   const { colors } = useTheme();
   const { showToast } = useToast();
   const { household } = useHousehold();
   const writer = household ? isWriter(household.role) : false;
   const [loading, setLoading] = useState(Boolean(contactId));
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [name, setName] = useState(openedFromPhone ? searchParam(params.draftName) : '');
+  const [email, setEmail] = useState(openedFromPhone ? searchParam(params.draftEmail) : '');
+  const [phone, setPhone] = useState(openedFromPhone ? searchParam(params.draftPhone) : '');
   const [sms, setSms] = useState(false);
+  const [held, setHeld] = useState(openedFromPhone ? searchParam(params.held) : '');
   const [saved, setSaved] = useState<Contact | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -99,6 +111,7 @@ export default function ContactEditScreen() {
       setEmail(next.email ?? '');
       setPhone(next.phone ?? '');
       setSms(next.smsReminders);
+      setHeld('');
       showToast(next.linkedUserId ? 'Contact saved and linked to an account' : 'Contact saved');
     } catch (error) {
       Alert.alert('Could not save contact', errorMessage(error, 'Try again.'));
@@ -173,10 +186,28 @@ export default function ContactEditScreen() {
         <Text style={[styles.hint, { color: colors.textTertiary }]}>
           Name is required. Phone and email are optional. SMS reminders stay off until you turn them on.
         </Text>
+        {held === 'email' ? (
+          <Text style={[styles.hint, { color: colors.danger }]}>
+            A contact with that email already exists. Change the email or clear it, then save.
+          </Text>
+        ) : null}
+        {held === 'name' ? (
+          <Text style={[styles.hint, { color: colors.danger }]}>
+            This phone contact has no name. Enter one, then save.
+          </Text>
+        ) : null}
+        {held === 'invalid' ? (
+          <Text style={[styles.hint, { color: colors.danger }]}>
+            Check the name, email, and phone from your phone, then save.
+          </Text>
+        ) : null}
         <AuthTextField
           label="Name"
           value={name}
-          onChangeText={setName}
+          onChangeText={(value) => {
+            setName(value);
+            if (held === 'name' || held === 'invalid') setHeld('');
+          }}
           autoCapitalize="words"
           autoComplete="name"
           textContentType="name"
@@ -186,7 +217,10 @@ export default function ContactEditScreen() {
         <AuthTextField
           label="Email"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(value) => {
+            setEmail(value);
+            if (held === 'email' || held === 'invalid') setHeld('');
+          }}
           autoCapitalize="none"
           autoComplete="email"
           keyboardType="email-address"
@@ -199,6 +233,7 @@ export default function ContactEditScreen() {
           onChangeText={(value) => {
             setPhone(value);
             if (!value.trim()) setSms(false);
+            if (held === 'invalid') setHeld('');
           }}
           keyboardType="phone-pad"
           autoComplete="tel"
