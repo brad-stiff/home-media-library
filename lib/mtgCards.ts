@@ -1,6 +1,8 @@
+import { Tables } from './database.types';
 import { colorIdentityKey } from './deckLegality';
 import { cardMatchesQuery } from './mtgOverview';
 import { getMyHousehold } from './household';
+import { pageAll } from './pageAll';
 import { getScryfallCardsByIds, ScryfallCard, scryfallDisplayName, scryfallImageUri } from './scryfall';
 import { supabase } from './supabase';
 
@@ -25,26 +27,7 @@ export type MtgCard = {
   addedAt: string;
 };
 
-type MtgCardRow = {
-  id: string;
-  household_id: string;
-  scryfall_id: string;
-  oracle_id: string | null;
-  name: string;
-  set_code: string | null;
-  set_name: string | null;
-  collector_number: string | null;
-  mana_cost: string | null;
-  type_line: string | null;
-  rarity: string | null;
-  image_uri: string | null;
-  qty: number;
-  foil: boolean;
-  color_identity: string | null;
-  added_by: string | null;
-  added_by_name: string | null;
-  created_at: string;
-};
+type MtgCardRow = Tables<'mtg_cards'>;
 
 function rowToCard(row: MtgCardRow): MtgCard {
   return {
@@ -70,13 +53,21 @@ function rowToCard(row: MtgCardRow): MtgCard {
 }
 
 export async function getAllMtgCards(): Promise<MtgCard[]> {
-  const { data, error } = await supabase
-    .from('mtg_cards')
-    .select('*')
-    .order('name', { ascending: true });
+  const rows = await pageAll((from, to) =>
+    supabase
+      .from('mtg_cards')
+      .select('*')
+      .order('name', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+  return rows.map(rowToCard);
+}
 
+export async function getMtgCard(id: string): Promise<MtgCard | null> {
+  const { data, error } = await supabase.from('mtg_cards').select('*').eq('id', id).maybeSingle();
   if (error) throw error;
-  return ((data as MtgCardRow[]) ?? []).map(rowToCard);
+  return data ? rowToCard(data) : null;
 }
 
 export async function searchMtgCollection(query: string): Promise<MtgCard[]> {
@@ -106,7 +97,7 @@ export async function addMtgCardFromScryfall(
     .maybeSingle();
 
   if (existing) {
-    const row = existing as MtgCardRow;
+    const row = existing;
     const { data, error } = await supabase
       .from('mtg_cards')
       .update({
@@ -122,7 +113,8 @@ export async function addMtgCardFromScryfall(
       }
       throw error;
     }
-    return rowToCard(data as MtgCardRow);
+    if (!data) throw new Error('Could not update this card.');
+    return rowToCard(data);
   }
 
   const { data, error } = await supabase
@@ -148,7 +140,8 @@ export async function addMtgCardFromScryfall(
     .single();
 
   if (error) throw error;
-  return rowToCard(data as MtgCardRow);
+  if (!data) throw new Error('Could not add this card.');
+  return rowToCard(data);
 }
 
 export async function updateMtgCardQty(id: string, qty: number): Promise<void> {
@@ -169,12 +162,13 @@ export async function updateMtgCardQty(id: string, qty: number): Promise<void> {
 }
 
 const colorCache = new Map<string, string>();
+const COLOR_WRITE_CHUNK = 200;
 
-/** Fills Scryfall color identity for collection sorts. Writes it back when this user may edit the row. */
-export async function attachColorIdentities(
-  cards: MtgCard[],
-  canUpdate: (card: MtgCard) => boolean,
-): Promise<MtgCard[]> {
+/**
+ * Fills missing Scryfall color identity for collection sorts.
+ * One household function writes the blanks, including cards this user cannot otherwise edit.
+ */
+export async function attachColorIdentities(cards: MtgCard[]): Promise<MtgCard[]> {
   const unresolved = cards.filter((card) => card.colorIdentity == null && !colorCache.has(card.scryfallId));
   if (unresolved.length > 0) {
     const found = await getScryfallCardsByIds(unresolved.map((card) => card.scryfallId));
@@ -189,15 +183,27 @@ export async function attachColorIdentities(
     return identity == null ? card : { ...card, colorIdentity: identity };
   });
 
-  await Promise.all(
-    next.map((card, index) => {
-      const previous = cards[index];
-      if (!previous || previous.colorIdentity != null || card.colorIdentity == null || !canUpdate(card)) {
-        return Promise.resolve();
-      }
-      return supabase.from('mtg_cards').update({ color_identity: card.colorIdentity }).eq('id', card.id);
-    }),
-  );
+  const pending = next.flatMap((card, index) => {
+    const previous = cards[index];
+    if (!previous || previous.colorIdentity != null || card.colorIdentity == null) return [];
+    return [{ id: card.id, color_identity: card.colorIdentity }];
+  });
+
+  try {
+    for (let index = 0; index < pending.length; index += COLOR_WRITE_CHUNK) {
+      const { error } = await supabase.rpc('fill_mtg_color_identities', {
+        p_cards: pending.slice(index, index + COLOR_WRITE_CHUNK),
+      });
+      if (error) throw error;
+    }
+  } catch {
+    // Until the household function is installed, store colors on rows this user may already edit.
+    await Promise.all(
+      pending.map((card) =>
+        supabase.from('mtg_cards').update({ color_identity: card.color_identity }).eq('id', card.id),
+      ),
+    );
+  }
 
   return next;
 }

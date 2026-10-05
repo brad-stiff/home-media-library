@@ -1,8 +1,12 @@
+import { Tables } from './database.types';
 import { extractYear } from './mediaFormat';
 import { getMovieDetails } from './tmdb';
 import { getMyHousehold } from './household';
+import { pageAll } from './pageAll';
 import { supabase } from './supabase';
-import { Movie, MovieOwnership, MovieRow, TmdbMovieDetails } from './types';
+import { Movie, MovieOwnership, TmdbMovieDetails } from './types';
+
+type MovieRow = Tables<'movies'>;
 
 function rowToMovie(row: MovieRow): Movie {
   return {
@@ -20,6 +24,7 @@ function rowToMovie(row: MovieRow): Movie {
     has4k: row.has_4k,
     hasDigital: row.has_digital,
     platform: row.platform,
+    barcode: row.barcode,
     addedBy: row.added_by,
     addedByName: row.added_by_name,
     addedAt: row.created_at,
@@ -34,13 +39,15 @@ function assertOwnership(ownership: MovieOwnership) {
 }
 
 export async function getAllMovies(): Promise<Movie[]> {
-  const { data, error } = await supabase
-    .from('movies')
-    .select('*')
-    .order('title', { ascending: true });
-
-  if (error) throw error;
-  return (data as MovieRow[]).map(rowToMovie);
+  const rows = await pageAll((from, to) =>
+    supabase
+      .from('movies')
+      .select('*')
+      .order('title', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+  return rows.map(rowToMovie);
 }
 
 export async function searchMoviesInLibrary(query: string): Promise<Movie[]> {
@@ -56,6 +63,7 @@ export async function searchMoviesInLibrary(query: string): Promise<Movie[]> {
       movie.hasBluray ? 'blu-ray bluray' : '',
       movie.has4k ? '4k uhd' : '',
       movie.hasDigital ? 'digital' : '',
+      movie.barcode ?? '',
     ]
       .join(' ')
       .toLowerCase();
@@ -66,7 +74,7 @@ export async function searchMoviesInLibrary(query: string): Promise<Movie[]> {
 export async function getMovieById(id: string): Promise<Movie | null> {
   const { data, error } = await supabase.from('movies').select('*').eq('id', id).maybeSingle();
   if (error) throw error;
-  return data ? rowToMovie(data as MovieRow) : null;
+  return data ? rowToMovie(data) : null;
 }
 
 export async function getMovieByTmdbId(tmdbId: number): Promise<Movie | null> {
@@ -79,7 +87,7 @@ export async function getMovieByTmdbId(tmdbId: number): Promise<Movie | null> {
     .maybeSingle();
 
   if (error) throw error;
-  return data ? rowToMovie(data as MovieRow) : null;
+  return data ? rowToMovie(data) : null;
 }
 
 export async function addMovie(
@@ -130,8 +138,9 @@ export async function addMovie(
     }
     throw error;
   }
+  if (!data) throw new Error('Could not save this movie.');
 
-  return rowToMovie(data as MovieRow);
+  return rowToMovie(data);
 }
 
 export async function updateMovieOwnership(id: string, ownership: MovieOwnership): Promise<void> {
@@ -182,8 +191,9 @@ export async function refreshMovieFromTmdb(movie: Movie): Promise<Movie> {
     }
     throw error;
   }
+  if (!data) throw new Error('Could not refresh this movie.');
 
-  return rowToMovie(data as MovieRow);
+  return rowToMovie(data);
 }
 
 export async function deleteMovie(id: string): Promise<void> {

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -95,11 +96,23 @@ export default function HouseholdGateScreen() {
 
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
-        <PrimaryButton label="Settings" onPress={() => router.push('/settings')} />
-        <PrimaryButton label="Account" onPress={() => router.push('/account')} />
-        <PrimaryButton label="About" onPress={() => router.push('/about')} />
+        <View style={styles.links}>
+          <TextLink label="Settings" onPress={() => router.push('/settings')} />
+          <TextLink label="Account" onPress={() => router.push('/account')} />
+          <TextLink label="About" onPress={() => router.push('/about')} />
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+function TextLink({ label, onPress }: { label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+
+  return (
+    <Pressable onPress={onPress} accessibilityRole="link" accessibilityLabel={label} style={styles.link}>
+      <Text style={[styles.linkText, { color: colors.accent }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -128,5 +141,16 @@ const styles = StyleSheet.create({
   error: {
     fontSize: 15,
     lineHeight: 20,
+  },
+  links: {
+    gap: spacing.xs,
+  },
+  link: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  linkText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

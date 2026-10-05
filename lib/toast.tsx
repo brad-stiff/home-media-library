@@ -21,11 +21,44 @@ type ToastContextValue = {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+type LiftApi = {
+  set: (id: string, lift: number) => void;
+  clear: (id: string) => void;
+};
+
+const ToastLiftContext = createContext<LiftApi | null>(null);
+
+/** Keep a toast above a bottom bar. Several screens can register; the tallest lift wins. */
+export function useToastLift(id: string, lift: number) {
+  const api = useContext(ToastLiftContext);
+  useEffect(() => {
+    if (!api) return undefined;
+    api.set(id, lift);
+    return () => api.clear(id);
+  }, [api, id, lift]);
+}
+
 export function ToastProvider({ children }: PropsWithChildren) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
+  const [lift, setLift] = useState(0);
+  const lifts = useRef(new Map<string, number>());
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const liftApi = useMemo<LiftApi>(
+    () => ({
+      set: (id, value) => {
+        lifts.current.set(id, value);
+        setLift(Math.max(0, ...lifts.current.values()));
+      },
+      clear: (id) => {
+        lifts.current.delete(id);
+        setLift(lifts.current.size === 0 ? 0 : Math.max(0, ...lifts.current.values()));
+      },
+    }),
+    [],
+  );
 
   const showToast = useCallback((message: string, tone: ToastTone = 'success') => {
     if (timer.current) clearTimeout(timer.current);
@@ -43,6 +76,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
 
   return (
     <ToastContext.Provider value={value}>
+      <ToastLiftContext.Provider value={liftApi}>
       <View style={styles.fill}>
         {children}
         {toast ? (
@@ -50,7 +84,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
             style={[
               styles.banner,
               {
-                bottom: insets.bottom + spacing.md,
+                bottom: insets.bottom + spacing.md + lift,
                 backgroundColor: colors.surfaceElevated,
                 borderColor: toast.tone === 'error' ? colors.danger : colors.border,
                 pointerEvents: 'none',
@@ -61,6 +95,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
           </View>
         ) : null}
       </View>
+      </ToastLiftContext.Provider>
     </ToastContext.Provider>
   );
 }

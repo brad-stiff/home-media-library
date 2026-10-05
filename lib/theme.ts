@@ -31,7 +31,7 @@ const palette = {
   light: {
     background: '#F2F2F7',
     surface: '#FFFFFF',
-    surfaceElevated: '#FFFFFF',
+    surfaceElevated: '#E8E8ED',
     border: '#E5E5EA',
     text: '#1C1C1E',
     textSecondary: '#636366',

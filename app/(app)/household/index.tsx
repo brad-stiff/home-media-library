@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 
+import { ChevronIcon } from '../../../components/icons';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { useAuth } from '../../../lib/auth';
 import {
@@ -28,11 +29,14 @@ import {
 import { useHousehold } from '../../../lib/householdContext';
 import { roleHint, roleLabel } from '../../../lib/roles';
 import { radius, spacing, useTheme } from '../../../lib/theme';
+import { useToast } from '../../../lib/toast';
 import { HouseholdRole } from '../../../lib/types';
 
 export default function HouseholdScreen() {
   const router = useRouter();
+  const { focus } = useLocalSearchParams<{ focus?: string }>();
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const { user, signOut } = useAuth();
   const { refresh } = useHousehold();
   const [household, setHousehold] = useState<HouseholdMembership | null>(null);
@@ -41,6 +45,8 @@ export default function HouseholdScreen() {
   const [loading, setLoading] = useState(true);
   const [savingName, setSavingName] = useState(false);
   const [rotating, setRotating] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const inviteOffset = useRef(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,12 +72,20 @@ export default function HouseholdScreen() {
     }, [load]),
   );
 
+  useEffect(() => {
+    if (focus !== 'invite' || loading) return;
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: Math.max(0, inviteOffset.current - spacing.md), animated: true });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [focus, loading]);
+
   const isAdmin = household?.role === 'admin';
 
   const handleCopyCode = async () => {
     if (!household?.inviteCode) return;
     await Clipboard.setStringAsync(household.inviteCode);
-    Alert.alert('Copied', 'Invite code copied to clipboard.');
+    showToast('Invite code copied');
   };
 
   const handleSaveName = async () => {
@@ -80,7 +94,7 @@ export default function HouseholdScreen() {
     try {
       await updateHouseholdName(nameDraft);
       await load();
-      Alert.alert('Saved', 'Household name updated.');
+      showToast('Household name saved');
     } catch (error) {
       Alert.alert('Error', errorMessage(error, 'Could not rename household.'));
     } finally {
@@ -163,7 +177,7 @@ export default function HouseholdScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
       <View style={styles.section}>
         <Text style={[styles.label, { color: colors.textSecondary }]}>Household name</Text>
         {isAdmin ? (
@@ -201,7 +215,12 @@ export default function HouseholdScreen() {
       </View>
 
       {isAdmin && household.inviteCode ? (
-        <View style={styles.section}>
+        <View
+          style={styles.section}
+          onLayout={(event) => {
+            inviteOffset.current = event.nativeEvent.layout.y;
+          }}
+        >
           <Text style={[styles.label, { color: colors.textSecondary }]}>Invite code</Text>
           <Pressable
             onPress={handleCopyCode}
@@ -210,12 +229,19 @@ export default function HouseholdScreen() {
             <Text style={[styles.code, { color: colors.text }]}>{household.inviteCode}</Text>
             <Text style={[styles.hint, { color: colors.textSecondary }]}>Tap to copy</Text>
           </Pressable>
-          <PrimaryButton
-            label="Regenerate code"
+          <Pressable
             onPress={handleRegenerate}
-            loading={rotating}
-            variant="danger"
-          />
+            disabled={rotating}
+            accessibilityRole="button"
+            accessibilityLabel="Regenerate code"
+            style={styles.textAction}
+          >
+            {rotating ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : (
+              <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Regenerate code</Text>
+            )}
+          </Pressable>
         </View>
       ) : null}
 
@@ -253,15 +279,10 @@ export default function HouseholdScreen() {
       </View>
 
       <View style={styles.section}>
-        <PrimaryButton label="Settings" onPress={() => router.push('/settings')} />
-        <PrimaryButton label="Contacts" onPress={() => router.push('/contacts')} />
-        {household.lendingEnabled ? (
-          <PrimaryButton label="Loan history" onPress={() => router.push('/loans')} />
-        ) : null}
-        <PrimaryButton
-          label="Join a different household"
-          onPress={() => router.push('/household/join')}
-        />
+        <LinkRow label="Settings" onPress={() => router.push('/settings')} />
+        <LinkRow label="Contacts" onPress={() => router.push('/contacts')} />
+        {household.lendingEnabled ? <LinkRow label="Loan history" onPress={() => router.push('/loans')} /> : null}
+        <LinkRow label="Join a different household" onPress={() => router.push('/household/join')} />
         <PrimaryButton
           label="Leave household"
           onPress={() => router.push('/household/confirm-departure?intent=leave')}
@@ -281,6 +302,22 @@ export default function HouseholdScreen() {
         </Pressable>
       </View>
     </ScrollView>
+  );
+}
+
+function LinkRow({ label, onPress }: { label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={[styles.memberRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+    >
+      <Text style={[styles.memberName, { color: colors.text, flex: 1 }]}>{label}</Text>
+      <ChevronIcon color={colors.textTertiary} />
+    </Pressable>
   );
 }
 
@@ -360,6 +397,11 @@ const styles = StyleSheet.create({
   memberName: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  textAction: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   signOut: {
     alignItems: 'center',

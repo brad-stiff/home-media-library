@@ -85,7 +85,7 @@ export default function SignUpScreen() {
           textContentType="newPassword"
         />
 
-        <PrimaryButton label="Create Account" onPress={handleSignUp} loading={loading} />
+        <PrimaryButton label="Create account" onPress={handleSignUp} loading={loading} />
 
         <AuthLink
           label="Already have an account? Sign in"

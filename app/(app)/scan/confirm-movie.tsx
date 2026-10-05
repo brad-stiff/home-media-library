@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
@@ -138,15 +137,7 @@ function ConfirmMovieFromScanScreen() {
             onPress={() => setSelected(item)}
             style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            {item.poster_path ? (
-              <Image
-                source={{ uri: `https://image.tmdb.org/t/p/w92${item.poster_path}` }}
-                style={styles.poster}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[styles.poster, { backgroundColor: colors.surfaceElevated }]} />
-            )}
+            <MoviePoster posterPath={item.poster_path} title={item.title} size="sm" style={styles.poster} />
             <View style={{ flex: 1, gap: 4 }}>
               <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={2}>
                 {item.title}

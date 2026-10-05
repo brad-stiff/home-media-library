@@ -1,17 +1,6 @@
-import { useState } from 'react';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  View,
-} from 'react-native';
+import { Children, ReactNode, useState } from 'react';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
-import { PrimaryButton } from '../../components/PrimaryButton';
 import {
   errorMessage,
   setHouseholdLending,
@@ -20,10 +9,8 @@ import {
 import { useHousehold } from '../../lib/householdContext';
 import {
   DOCK_LABELS,
-  LibraryLayout,
   moveDockTab,
   visibleDockTabs,
-  withTabPrefs,
 } from '../../lib/libraryView';
 import {
   householdShows,
@@ -141,329 +128,221 @@ export default function SettingsScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Appearance</Text>
-          <Text style={[styles.hint, { color: colors.textTertiary }]}>
-            Saved on your account. System follows this phone.
-          </Text>
-          <View style={styles.choices}>
-            {APPEARANCE_OPTIONS.map((option) => {
-              const active = profile.appearance === option.id;
-              return (
-                <Pressable
-                  key={option.id}
-                  onPress={() => void handleAppearance(option.id)}
-                  style={[
-                    styles.choice,
-                    {
-                      backgroundColor: active ? colors.accentMuted : colors.surface,
-                      borderColor: active ? colors.accent : colors.border,
-                    },
-                  ]}
-                >
-                  <Text style={{ color: active ? colors.accent : colors.text, fontWeight: '700' }}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Your tabs</Text>
-          <Text style={[styles.hint, { color: colors.textTertiary }]}>
-            Hide a type from your library. Other people still see it, and active loans stay on the
-            Loans list.
-          </Text>
-          {household ? (
-            MEDIA.map((type) => {
-              const available = householdShows(household, type.id);
-              const shown = available && (
-                type.id === 'movies'
-                  ? !profile.hideMovies
-                  : type.id === 'books'
-                    ? !profile.hideBooks
-                    : !profile.hideMtg
-              );
-              return (
-                <View
-                  key={type.id}
-                  style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                >
-                  <View style={styles.rowText}>
-                    <Text style={[styles.rowTitle, { color: colors.text }]}>{type.label}</Text>
-                    <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                      {available ? 'Shown in your library' : 'Off for the household'}
-                    </Text>
-                  </View>
-                  <Switch
-                    value={shown}
-                    disabled={!available}
-                    onValueChange={(value) => void handlePersonalToggle(type.id, value)}
-                    trackColor={{ true: colors.accent, false: colors.border }}
-                  />
-                </View>
-              );
-            })
-          ) : (
-            <Text style={[styles.hint, { color: colors.textSecondary }]}>
-              Create or join a household to choose which tabs you see.
-            </Text>
-          )}
-        </View>
-
-        {household ? (
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Library view</Text>
-            <Text style={[styles.hint, { color: colors.textTertiary }]}>
-              Opening tab, dock order, layout, and density stay on your account. Sort and filters
-              are remembered from the library.
-            </Text>
-            <Text style={[styles.rowTitle, { color: colors.text }]}>Opening tab</Text>
-            <View style={styles.choices}>
-              {(['resume', ...visibleDock] as const).map((option) => {
-                const active = profile.libraryView.opening === option;
-                const label = option === 'resume' ? 'Resume' : DOCK_LABELS[option];
-                return (
-                  <Pressable
-                    key={option}
-                    onPress={() => void saveView({ ...profile.libraryView, opening: option })}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    style={[
-                      styles.choice,
-                      {
-                        backgroundColor: active ? colors.accentMuted : colors.surface,
-                        borderColor: active ? colors.accent : colors.border,
-                      },
-                    ]}
-                  >
-                    <Text style={{ color: active ? colors.accent : colors.text, fontWeight: '700' }}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            {profile.libraryView.opening !== 'resume' &&
-            !visibleDock.includes(profile.libraryView.opening) ? (
-              <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                That tab is hidden, so the library opens on the first tab in your dock.
-              </Text>
-            ) : null}
-
-            <Text style={[styles.rowTitle, { color: colors.text }]}>Density</Text>
-            <View style={styles.choices}>
-              {(
-                [
-                  ['comfortable', 'Comfortable'],
-                  ['compact', 'Compact'],
-                ] as const
-              ).map(([id, label]) => {
-                const active = profile.libraryView.density === id;
-                return (
-                  <Pressable
-                    key={id}
-                    onPress={() => void saveView({ ...profile.libraryView, density: id })}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    style={[
-                      styles.choice,
-                      {
-                        backgroundColor: active ? colors.accentMuted : colors.surface,
-                        borderColor: active ? colors.accent : colors.border,
-                      },
-                    ]}
-                  >
-                    <Text style={{ color: active ? colors.accent : colors.text, fontWeight: '700' }}>
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {visibleDock.length > 1 ? (
-              <>
-                <Text style={[styles.rowTitle, { color: colors.text }]}>Dock order</Text>
-                {visibleDock.map((type, index) => (
-                  <View
-                    key={type}
-                    style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  >
-                    <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>{DOCK_LABELS[type]}</Text>
-                    <Pressable
-                      disabled={index === 0}
-                      onPress={() =>
-                        void saveView({
-                          ...profile.libraryView,
-                          dockOrder: moveDockTab(profile.libraryView.dockOrder, visibleDock, type, -1),
-                        })
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel={`Move ${DOCK_LABELS[type]} up`}
-                      style={styles.nudge}
-                    >
-                      <Text style={{ color: index === 0 ? colors.textTertiary : colors.accent, fontWeight: '700' }}>
-                        Up
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      disabled={index === visibleDock.length - 1}
-                      onPress={() =>
-                        void saveView({
-                          ...profile.libraryView,
-                          dockOrder: moveDockTab(profile.libraryView.dockOrder, visibleDock, type, 1),
-                        })
-                      }
-                      accessibilityRole="button"
-                      accessibilityLabel={`Move ${DOCK_LABELS[type]} down`}
-                      style={styles.nudge}
-                    >
-                      <Text
-                        style={{
-                          color: index === visibleDock.length - 1 ? colors.textTertiary : colors.accent,
-                          fontWeight: '700',
-                        }}
-                      >
-                        Down
-                      </Text>
-                    </Pressable>
-                  </View>
-                ))}
-              </>
-            ) : null}
-
-            {visibleDock.map((type) => (
-              <View key={`layout-${type}`} style={styles.section}>
-                <Text style={[styles.rowTitle, { color: colors.text }]}>
-                  {type === 'mtg' ? 'MTG collection layout' : `${DOCK_LABELS[type]} layout`}
-                </Text>
-                <View style={styles.choices}>
-                  {(
-                    [
-                      ['grid', 'Grid'],
-                      ['list', 'List'],
-                    ] as const
-                  ).map(([id, label]) => {
-                    const active = profile.libraryView[type].layout === id;
-                    return (
-                      <Pressable
-                        key={id}
-                        onPress={() =>
-                          void saveView(withTabPrefs(profile.libraryView, type, { layout: id as LibraryLayout }))
-                        }
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                        style={[
-                          styles.choice,
-                          {
-                            backgroundColor: active ? colors.accentMuted : colors.surface,
-                            borderColor: active ? colors.accent : colors.border,
-                          },
-                        ]}
-                      >
-                        <Text style={{ color: active ? colors.accent : colors.text, fontWeight: '700' }}>
-                          {label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            ))}
-            <Text style={[styles.hint, { color: colors.textTertiary }]}>
-              Decks stay a list. Grid and list both use the density above.
-            </Text>
-          </View>
-        ) : null}
-
-        {isAdmin && household ? (
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Household library</Text>
-            <Text style={[styles.hint, { color: colors.textTertiary }]}>
-              Turning a type off hides its tab and add buttons for everyone. The catalog stays.
-            </Text>
-            {MEDIA.map((type) => {
-              const shown = householdShows(household, type.id);
-              return (
-                <View
-                  key={type.id}
-                  style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                >
-                  <View style={styles.rowText}>
-                    <Text style={[styles.rowTitle, { color: colors.text }]}>{type.label}</Text>
-                    <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                      {shown ? 'Available to the household' : 'Hidden for everyone'}
-                    </Text>
-                  </View>
-                  <Switch
-                    value={shown}
-                    onValueChange={(value) => void handleHouseholdToggle(type.id, value)}
-                    trackColor={{ true: colors.accent, false: colors.border }}
-                  />
-                </View>
-              );
-            })}
-          </View>
-        ) : null}
-
-        {isAdmin && household ? (
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>Checkout</Text>
-            <Text style={[styles.hint, { color: colors.textTertiary }]}>
-              Turning this off hides lending, the loans list, checkout badges, availability filters,
-              and loan history. The catalog and existing loans stay. A title that is still out can
-              be returned or cancelled.
-            </Text>
-            <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.rowText}>
-                <Text style={[styles.rowTitle, { color: colors.text }]}>Checkout</Text>
-                <Text style={[styles.hint, { color: colors.textTertiary }]}>
-                  {household.lendingEnabled ? 'On for the household' : 'Hidden for everyone'}
-                </Text>
-              </View>
-              <Switch
-                value={household.lendingEnabled}
-                onValueChange={(value) => void handleLending(value)}
-                trackColor={{ true: colors.accent, false: colors.border }}
-                accessibilityLabel="Household checkout"
-              />
-            </View>
-          </View>
-        ) : null}
-
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Export library</Text>
-          <Text style={[styles.hint, { color: colors.textTertiary }]}>
-            Share a JSON backup of movies, books, MTG cards, decks, checkouts, and contacts. Sharing
-            the file leaves the household in place.
-          </Text>
-          <PrimaryButton
-            label="Export library"
-            onPress={handleExport}
-            loading={exporting}
-            disabled={!household}
+    <ScrollView contentContainerStyle={styles.content}>
+      <SettingsSection title="Appearance" help="Saved on your account, and system follows this phone.">
+        {APPEARANCE_OPTIONS.map((option) => (
+          <ChoiceRow
+            key={option.id}
+            label={option.label}
+            selected={profile.appearance === option.id}
+            onPress={() => void handleAppearance(option.id)}
           />
-          {!household ? (
-            <Text style={[styles.hint, { color: colors.textTertiary }]}>
-              Join a household to export its library.
+        ))}
+      </SettingsSection>
+
+      <SettingsSection
+        title="Your tabs"
+        help="Hide a type from your library. Other people still see it, and active loans stay on the Loans list."
+      >
+        {household ? (
+          MEDIA.map((type) => {
+            const available = householdShows(household, type.id);
+            const shown =
+              available &&
+              (type.id === 'movies' ? !profile.hideMovies : type.id === 'books' ? !profile.hideBooks : !profile.hideMtg);
+            return (
+              <View key={type.id} style={styles.row}>
+                <View style={styles.rowText}>
+                  <Text style={[styles.rowTitle, { color: colors.text }]}>{type.label}</Text>
+                  {available ? null : (
+                    <Text style={[styles.rowHint, { color: colors.textTertiary }]}>Off for the household</Text>
+                  )}
+                </View>
+                <Switch
+                  value={shown}
+                  disabled={!available}
+                  onValueChange={(value) => void handlePersonalToggle(type.id, value)}
+                  trackColor={{ true: colors.accent, false: colors.border }}
+                  accessibilityLabel={type.label}
+                />
+              </View>
+            );
+          })
+        ) : (
+          <Text style={[styles.rowHint, { color: colors.textSecondary, padding: spacing.md }]}>
+            Create or join a household to choose which tabs you see.
+          </Text>
+        )}
+      </SettingsSection>
+
+      {household ? (
+        <SettingsSection
+          title="Library"
+          help="Choose which tab opens first, and the order of the tabs along the bottom."
+        >
+          {(['resume', ...visibleDock] as const).map((option) => {
+            const label = option === 'resume' ? 'Resume' : DOCK_LABELS[option];
+            return (
+              <ChoiceRow
+                key={option}
+                label={option === 'resume' ? 'Opening tab · Resume' : `Opening tab · ${label}`}
+                selected={profile.libraryView.opening === option}
+                onPress={() => void saveView({ ...profile.libraryView, opening: option })}
+              />
+            );
+          })}
+          {profile.libraryView.opening !== 'resume' && !visibleDock.includes(profile.libraryView.opening) ? (
+            <Text style={[styles.rowHint, { color: colors.textTertiary, paddingHorizontal: spacing.md, paddingBottom: spacing.sm }]}>
+              That tab is hidden, so the library opens on the first tab.
             </Text>
           ) : null}
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {visibleDock.length > 1
+            ? visibleDock.map((type, index) => (
+                <View key={type} style={styles.row}>
+                  <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>{DOCK_LABELS[type]}</Text>
+                  <Pressable
+                    disabled={index === 0}
+                    onPress={() =>
+                      void saveView({
+                        ...profile.libraryView,
+                        dockOrder: moveDockTab(profile.libraryView.dockOrder, visibleDock, type, -1),
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Move ${DOCK_LABELS[type]} up`}
+                    style={styles.nudge}
+                  >
+                    <Text style={{ color: index === 0 ? colors.textTertiary : colors.accent, fontWeight: '700' }}>
+                      Up
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    disabled={index === visibleDock.length - 1}
+                    onPress={() =>
+                      void saveView({
+                        ...profile.libraryView,
+                        dockOrder: moveDockTab(profile.libraryView.dockOrder, visibleDock, type, 1),
+                      })
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Move ${DOCK_LABELS[type]} down`}
+                    style={styles.nudge}
+                  >
+                    <Text
+                      style={{
+                        color: index === visibleDock.length - 1 ? colors.textTertiary : colors.accent,
+                        fontWeight: '700',
+                      }}
+                    >
+                      Down
+                    </Text>
+                  </Pressable>
+                </View>
+              ))
+            : null}
+        </SettingsSection>
+      ) : null}
+
+      {isAdmin && household ? (
+        <SettingsSection
+          title="Household library"
+          help="Turning a type off hides its tab and add buttons for everyone. The catalog stays."
+        >
+          {MEDIA.map((type) => (
+            <View key={type.id} style={styles.row}>
+              <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>{type.label}</Text>
+              <Switch
+                value={householdShows(household, type.id)}
+                onValueChange={(value) => void handleHouseholdToggle(type.id, value)}
+                trackColor={{ true: colors.accent, false: colors.border }}
+                accessibilityLabel={`${type.label} for the household`}
+              />
+            </View>
+          ))}
+        </SettingsSection>
+      ) : null}
+
+      {isAdmin && household ? (
+        <SettingsSection
+          title="Checkout"
+          help="Turning this off hides lending for everyone. A title that is still out can be returned or cancelled."
+        >
+          <View style={styles.row}>
+            <Text style={[styles.rowTitle, { color: colors.text, flex: 1 }]}>Checkout</Text>
+            <Switch
+              value={household.lendingEnabled}
+              onValueChange={(value) => void handleLending(value)}
+              trackColor={{ true: colors.accent, false: colors.border }}
+              accessibilityLabel="Household checkout"
+            />
+          </View>
+        </SettingsSection>
+      ) : null}
+
+      <SettingsSection
+        title="Export"
+        help={
+          household
+            ? 'Share a JSON backup of the catalog. Sharing the file leaves the household in place.'
+            : 'Join a household to export its library.'
+        }
+      >
+        <Pressable
+          onPress={() => void handleExport()}
+          disabled={!household || exporting}
+          accessibilityRole="button"
+          accessibilityLabel="Export library"
+          style={styles.row}
+        >
+          <Text style={[styles.rowTitle, { color: household ? colors.accent : colors.textTertiary }]}>
+            {exporting ? 'Exporting…' : 'Export library'}
+          </Text>
+        </Pressable>
+      </SettingsSection>
+    </ScrollView>
+  );
+}
+
+function SettingsSection({ title, help, children }: { title: string; help: string; children: ReactNode }) {
+  const { colors } = useTheme();
+
+  const rows = Children.toArray(children);
+
+  return (
+    <View style={styles.section}>
+      <Text style={[styles.header, { color: colors.textSecondary }]}>{title}</Text>
+      <Text style={[styles.help, { color: colors.textTertiary }]}>{help}</Text>
+      <View style={[styles.group, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {rows.map((row, index) => (
+          <View
+            key={index}
+            style={index > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border } : null}
+          >
+            {row}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function ChoiceRow({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      style={styles.row}
+    >
+      <Text style={[styles.rowTitle, { color: selected ? colors.accent : colors.text, flex: 1 }]}>{label}</Text>
+      {selected ? <Text style={{ color: colors.accent, fontWeight: '700' }}>Selected</Text> : null}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
   content: {
     padding: spacing.lg,
     gap: spacing.xl,
@@ -472,40 +351,25 @@ const styles = StyleSheet.create({
   section: {
     gap: spacing.sm,
   },
-  label: {
+  header: {
     fontSize: 13,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  hint: {
+  help: {
     fontSize: 14,
     lineHeight: 20,
   },
-  choices: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  choice: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: radius.md,
+  group: {
     borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-  },
-  nudge: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: radius.md,
+    overflow: 'hidden',
   },
   row: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.md,
-    padding: spacing.md,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
@@ -517,5 +381,15 @@ const styles = StyleSheet.create({
   rowTitle: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  rowHint: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  nudge: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

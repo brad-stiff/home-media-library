@@ -12,7 +12,7 @@ npm install
 
 2. Create a [Supabase](https://supabase.com) project, then run [`supabase/schema.sql`](./supabase/schema.sql) once in the SQL Editor.
 
-   The project already in use is on this schema. Do not run the file there again.
+   The project already in use is on the older snapshot. Do not run that file there again. Apply each new file in [`supabase/migrations`](./supabase/migrations) once, in name order, in the SQL Editor.
 
 3. For local testing, disable email confirmation:
 

@@ -1,12 +1,14 @@
 import { Image } from 'expo-image';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 
 import { posterUrl, radius, useTheme } from '../lib/theme';
 
 interface MoviePosterProps {
-  posterPath: string | null;
+  posterPath?: string | null;
+  uri?: string | null;
   title: string;
   size?: 'sm' | 'md' | 'lg';
+  style?: StyleProp<ViewStyle>;
 }
 
 const sizes = {
@@ -15,15 +17,21 @@ const sizes = {
   lg: { width: 160, height: 240 },
 };
 
-export function MoviePoster({ posterPath, title, size = 'md' }: MoviePosterProps) {
+export function MoviePoster({ posterPath, uri, title, size = 'md', style }: MoviePosterProps) {
   const { colors } = useTheme();
   const dimensions = sizes[size];
-  const uri = posterUrl(posterPath, size === 'sm' ? 'w342' : 'w500');
+  const resolved = uri ?? posterUrl(posterPath ?? null, size === 'sm' ? 'w342' : 'w500');
 
   return (
-    <View style={[styles.container, dimensions, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-      {uri ? (
-        <Image source={{ uri }} style={styles.image} contentFit="cover" transition={200} />
+    <View
+      style={[
+        styles.container,
+        style ?? dimensions,
+        { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+      ]}
+    >
+      {resolved ? (
+        <Image source={{ uri: resolved }} style={styles.image} contentFit="cover" transition={200} />
       ) : (
         <View style={[styles.placeholder, { backgroundColor: colors.surfaceElevated }]}>
           <Text style={[styles.placeholderText, { color: colors.textTertiary }]} numberOfLines={3}>

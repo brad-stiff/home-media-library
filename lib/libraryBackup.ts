@@ -1,5 +1,8 @@
 import { getMyHousehold } from './household';
+import { pageAll } from './pageAll';
 import { supabase } from './supabase';
+
+type HouseholdTable = 'movies' | 'books' | 'mtg_cards' | 'mtg_decks' | 'checkouts' | 'contacts';
 
 export type LibraryBackup = {
   version: 1;
@@ -13,10 +16,15 @@ export type LibraryBackup = {
   contacts: unknown[];
 };
 
-async function selectAll(table: string, householdId: string): Promise<unknown[]> {
-  const { data, error } = await supabase.from(table).select('*').eq('household_id', householdId);
-  if (error) throw error;
-  return data ?? [];
+async function selectAll(table: HouseholdTable, householdId: string): Promise<unknown[]> {
+  return pageAll((from, to) =>
+    supabase
+      .from(table)
+      .select('*')
+      .eq('household_id', householdId)
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
 }
 
 /** JSON backup of the tables that exist today. Games and Pokémon fields arrive with later phases. */
@@ -33,12 +41,15 @@ export async function buildLibraryBackup(): Promise<LibraryBackup> {
 
   const mtgDecks = await Promise.all(
     (decks as { id: string }[]).map(async (deck) => {
-      const { data, error } = await supabase
-        .from('mtg_deck_cards')
-        .select('*')
-        .eq('deck_id', deck.id);
-      if (error) throw error;
-      return { ...deck, cards: data ?? [] };
+      const cards = await pageAll((from, to) =>
+        supabase
+          .from('mtg_deck_cards')
+          .select('*')
+          .eq('deck_id', deck.id)
+          .order('id', { ascending: true })
+          .range(from, to),
+      );
+      return { ...deck, cards };
     }),
   );
 

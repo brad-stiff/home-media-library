@@ -1,5 +1,5 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +11,13 @@ import {
 } from 'react-native';
 
 import { EmptyState } from '../../components/EmptyState';
+import { HeaderMenu, useAppMenu } from '../../components/HeaderMenu';
+import { LibraryDock } from '../../components/LibraryDock';
 import { useHousehold } from '../../lib/householdContext';
+import { visibleDockTabs } from '../../lib/libraryView';
+import { queueLibraryTab } from '../../lib/pendingLibraryTab';
+import { isTypeVisible, useProfile } from '../../lib/profile';
+import { useToastLift } from '../../lib/toast';
 import {
   CheckoutStatus,
   HouseholdLoan,
@@ -42,8 +48,13 @@ function closedLabel(loan: HouseholdLoan): string {
 
 export default function LoansScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { colors } = useTheme();
+  const menu = useAppMenu();
   const { household } = useHousehold();
+  const { profile } = useProfile();
+  const [dockHeight, setDockHeight] = useState(64);
+  useToastLift('loans', dockHeight + spacing.md);
   const writer = household ? isWriter(household.role) : false;
   const lendingOn = household?.lendingEnabled !== false;
   const [filter, setFilter] = useState<CheckoutStatus>('active');
@@ -73,6 +84,26 @@ export default function LoansScreen() {
       void load();
     }, [load, lendingOn]),
   );
+
+  const tabs = useMemo(
+    () =>
+      visibleDockTabs(profile.libraryView.dockOrder, (type) => {
+        if (type === 'games' || type === 'pokemon') return false;
+        if (!household) return true;
+        return isTypeVisible(household, profile, type);
+      }),
+    [household, profile],
+  );
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerRight: () => <HeaderMenu groups={menu} /> });
+  }, [navigation, menu]);
+
+  const openLibraryTab = (next: (typeof tabs)[number]) => {
+    queueLibraryTab(next);
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  };
 
   const visible = useMemo(
     () => loans.filter((loan) => checkoutStatus(loan) === filter),
@@ -112,6 +143,18 @@ export default function LoansScreen() {
     ]);
   };
 
+  const tabBar = (
+    <View onLayout={(event) => setDockHeight(event.nativeEvent.layout.height)}>
+      <LibraryDock
+        tabs={tabs}
+        activeTab="loans"
+        onTab={openLibraryTab}
+        showLoans={lendingOn}
+        onLoans={() => undefined}
+      />
+    </View>
+  );
+
   if (!lendingOn) {
     return (
       <View style={styles.container}>
@@ -119,6 +162,7 @@ export default function LoansScreen() {
           title="Checkout is hidden"
           message="An admin turned off checkout for this household. Open a title that is still checked out to return or cancel that loan."
         />
+        {tabBar}
       </View>
     );
   }
@@ -132,6 +176,9 @@ export default function LoansScreen() {
             <Pressable
               key={value}
               onPress={() => setFilter(value)}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+              accessibilityState={{ selected: active }}
               style={[
                 styles.chip,
                 {
@@ -161,6 +208,7 @@ export default function LoansScreen() {
         <FlatList
           data={visible}
           keyExtractor={(item) => item.id}
+          style={styles.listFlex}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => {
             const active = checkoutStatus(item) === 'active';
@@ -175,10 +223,22 @@ export default function LoansScreen() {
                 </Pressable>
                 {writer && active ? (
                   <View style={styles.actions}>
-                    <Pressable onPress={() => runAction(item, 'return')} disabled={busyId === item.id}>
+                    <Pressable
+                      onPress={() => runAction(item, 'return')}
+                      disabled={busyId === item.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Return ${item.title}`}
+                      style={styles.action}
+                    >
                       <Text style={{ color: colors.accent, fontWeight: '700' }}>Return</Text>
                     </Pressable>
-                    <Pressable onPress={() => runAction(item, 'cancel')} disabled={busyId === item.id}>
+                    <Pressable
+                      onPress={() => runAction(item, 'cancel')}
+                      disabled={busyId === item.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Cancel loan for ${item.title}`}
+                      style={styles.action}
+                    >
                       <Text style={{ color: colors.danger, fontWeight: '700' }}>Cancel</Text>
                     </Pressable>
                   </View>
@@ -188,6 +248,7 @@ export default function LoansScreen() {
           }}
         />
       )}
+      {tabBar}
     </View>
   );
 }
@@ -200,16 +261,19 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   chip: {
+    minHeight: 44,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     borderRadius: radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  listFlex: { flex: 1 },
   list: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.lg,
@@ -232,7 +296,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   actions: {
-    gap: spacing.sm,
     alignItems: 'flex-end',
+  },
+  action: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
   },
 });

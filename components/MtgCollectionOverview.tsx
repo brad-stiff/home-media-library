@@ -1,8 +1,10 @@
 import { Image } from 'expo-image';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ReactNode } from 'react';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { SetSummary, TypeBar } from '../lib/mtgOverview';
 import { radius, spacing, typeScale, useTheme } from '../lib/theme';
+import { ChevronIcon } from './icons';
 
 type MtgCollectionOverviewProps = {
   bars: TypeBar[];
@@ -12,6 +14,9 @@ type MtgCollectionOverviewProps = {
   onOpenAll: () => void;
   bottomPad: number;
   filtering: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
+  footer?: ReactNode;
 };
 
 function completionLabel(set: SetSummary): string {
@@ -29,6 +34,9 @@ export function MtgCollectionOverview({
   onOpenAll,
   bottomPad,
   filtering,
+  refreshing,
+  onRefresh,
+  footer,
 }: MtgCollectionOverviewProps) {
   const { colors } = useTheme();
   const max = Math.max(...bars.map((bar) => bar.count), 1);
@@ -39,7 +47,9 @@ export function MtgCollectionOverview({
       keyExtractor={(item) => item.code}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}
+      ListFooterComponent={footer ? <View>{footer}</View> : null}
       ListHeaderComponent={
         <View style={styles.header}>
           <Text style={[typeScale.label, { color: colors.textTertiary }]}>Card types</Text>
@@ -72,7 +82,7 @@ export function MtgCollectionOverview({
             style={[styles.allCards, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
             <Text style={[typeScale.body, { color: colors.text, fontWeight: '600' }]}>All cards</Text>
-            <Text style={[typeScale.label, { color: colors.accent, fontSize: 14 }]}>Open</Text>
+            <ChevronIcon color={colors.textTertiary} />
           </Pressable>
           <Text style={[typeScale.label, { color: colors.textTertiary }]}>Sets</Text>
         </View>
@@ -93,16 +103,17 @@ export function MtgCollectionOverview({
             accessibilityLabel={`${item.name}, ${label}`}
             style={[styles.tile, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            <View style={styles.iconPlate}>
+            <View style={[styles.iconPlate, { backgroundColor: colors.surfaceElevated }]}>
               {item.iconSvgUri ? (
                 <Image
                   source={{ uri: item.iconSvgUri }}
                   style={styles.icon}
                   contentFit="contain"
+                  tintColor={colors.text}
                   accessibilityLabel=""
                 />
               ) : (
-                <Text style={[typeScale.label, { color: '#1C1C1E' }]}>{(item.code || '?').slice(0, 3).toUpperCase()}</Text>
+                <Text style={[typeScale.label, { color: colors.text }]}>{(item.code || '?').slice(0, 3).toUpperCase()}</Text>
               )}
             </View>
             <View style={styles.tileMeta}>
@@ -113,7 +124,7 @@ export function MtgCollectionOverview({
                 {label}
               </Text>
             </View>
-            <Text style={[typeScale.label, { color: colors.accent, fontSize: 14 }]}>Open</Text>
+            <ChevronIcon color={colors.textTertiary} />
           </Pressable>
         );
       }}
@@ -176,7 +187,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radius.sm,
-    backgroundColor: '#F5F5F7',
     alignItems: 'center',
     justifyContent: 'center',
   },

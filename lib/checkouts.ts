@@ -1,4 +1,6 @@
+import { Tables } from './database.types';
 import { getMyHousehold } from './household';
+import { mapInChunks, pageAll } from './pageAll';
 import { supabase } from './supabase';
 
 export { checkoutStatus, type CheckoutStatus } from './checkoutStatus';
@@ -23,25 +25,14 @@ export type HouseholdLoan = Checkout & {
   title: string;
 };
 
-type CheckoutRow = {
-  id: string;
-  household_id: string;
-  item_type: CheckoutItemType;
-  item_id: string;
-  contact_id: string | null;
-  borrower_name: string;
-  checked_out_at: string;
-  returned_at: string | null;
-  cancelled_at: string | null;
-  checked_out_by: string | null;
-  notes: string | null;
-};
+type CheckoutRow = Tables<'checkouts'>;
 
 function rowToCheckout(row: CheckoutRow): Checkout {
+  const itemType: CheckoutItemType = row.item_type === 'book' ? 'book' : 'movie';
   return {
     id: row.id,
     householdId: row.household_id,
-    itemType: row.item_type,
+    itemType,
     itemId: row.item_id,
     contactId: row.contact_id,
     borrowerName: row.borrower_name,
@@ -67,7 +58,7 @@ export async function getActiveCheckout(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? rowToCheckout(data as CheckoutRow) : null;
+  return data ? rowToCheckout(data) : null;
 }
 
 /** Map of item_id → active checkout for a given type (for library badges/filters). */
@@ -78,16 +69,20 @@ export async function getActiveCheckoutsByItemIds(
   const map = new Map<string, Checkout>();
   if (itemIds.length === 0) return map;
 
-  const { data, error } = await supabase
-    .from('checkouts')
-    .select('*')
-    .eq('item_type', itemType)
-    .in('item_id', itemIds)
-    .is('returned_at', null)
-    .is('cancelled_at', null);
-
-  if (error) throw error;
-  for (const row of (data as CheckoutRow[]) ?? []) {
+  const rows = await mapInChunks(itemIds, (ids) =>
+    pageAll((from, to) =>
+      supabase
+        .from('checkouts')
+        .select('*')
+        .eq('item_type', itemType)
+        .in('item_id', ids)
+        .is('returned_at', null)
+        .is('cancelled_at', null)
+        .order('id', { ascending: true })
+        .range(from, to),
+    ),
+  );
+  for (const row of rows) {
     map.set(row.item_id, rowToCheckout(row));
   }
   return map;
@@ -107,7 +102,8 @@ export async function checkoutItem(
   });
 
   if (error) throw error;
-  return rowToCheckout(data as CheckoutRow);
+  if (!data) throw new Error('Could not check out this item.');
+  return rowToCheckout(data);
 }
 
 export async function returnCheckout(checkoutId: string): Promise<Checkout> {
@@ -116,7 +112,8 @@ export async function returnCheckout(checkoutId: string): Promise<Checkout> {
   });
 
   if (error) throw error;
-  return rowToCheckout(data as CheckoutRow);
+  if (!data) throw new Error('Could not return this item.');
+  return rowToCheckout(data);
 }
 
 export async function cancelCheckout(checkoutId: string): Promise<Checkout> {
@@ -125,7 +122,8 @@ export async function cancelCheckout(checkoutId: string): Promise<Checkout> {
   });
 
   if (error) throw error;
-  return rowToCheckout(data as CheckoutRow);
+  if (!data) throw new Error('Could not cancel this loan.');
+  return rowToCheckout(data);
 }
 
 export async function updateCheckoutBorrower(checkoutId: string, contactId: string): Promise<Checkout> {
@@ -135,52 +133,58 @@ export async function updateCheckoutBorrower(checkoutId: string, contactId: stri
   });
 
   if (error) throw error;
-  return rowToCheckout(data as CheckoutRow);
+  if (!data) throw new Error('Could not change this loan.');
+  return rowToCheckout(data);
 }
 
 export async function listItemCheckouts(
   itemType: CheckoutItemType,
   itemId: string,
 ): Promise<Checkout[]> {
-  const { data, error } = await supabase
-    .from('checkouts')
-    .select('*')
-    .eq('item_type', itemType)
-    .eq('item_id', itemId)
-    .order('checked_out_at', { ascending: false });
-
-  if (error) throw error;
-  return ((data as CheckoutRow[]) ?? []).map(rowToCheckout);
+  const rows = await pageAll((from, to) =>
+    supabase
+      .from('checkouts')
+      .select('*')
+      .eq('item_type', itemType)
+      .eq('item_id', itemId)
+      .order('checked_out_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to),
+  );
+  return rows.map(rowToCheckout);
 }
 
 export async function listHouseholdLoans(): Promise<HouseholdLoan[]> {
   const household = await getMyHousehold();
-  const { data, error } = await supabase
-    .from('checkouts')
-    .select('*')
-    .eq('household_id', household.householdId)
-    .order('checked_out_at', { ascending: false });
-
-  if (error) throw error;
-  const rows = ((data as CheckoutRow[]) ?? []).map(rowToCheckout);
+  const checkoutRows = await pageAll((from, to) =>
+    supabase
+      .from('checkouts')
+      .select('*')
+      .eq('household_id', household.householdId)
+      .order('checked_out_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(from, to),
+  );
+  const rows = checkoutRows.map(rowToCheckout);
   const movieIds = rows.filter((row) => row.itemType === 'movie').map((row) => row.itemId);
   const bookIds = rows.filter((row) => row.itemType === 'book').map((row) => row.itemId);
 
   const [movies, books] = await Promise.all([
-    movieIds.length
-      ? supabase.from('movies').select('id, title').in('id', movieIds)
-      : Promise.resolve({ data: [], error: null }),
-    bookIds.length
-      ? supabase.from('books').select('id, title').in('id', bookIds)
-      : Promise.resolve({ data: [], error: null }),
+    mapInChunks(movieIds, async (ids) => {
+      const { data, error } = await supabase.from('movies').select('id, title').in('id', ids);
+      if (error) throw error;
+      return data ?? [];
+    }),
+    mapInChunks(bookIds, async (ids) => {
+      const { data, error } = await supabase.from('books').select('id, title').in('id', ids);
+      if (error) throw error;
+      return data ?? [];
+    }),
   ]);
 
-  if (movies.error) throw movies.error;
-  if (books.error) throw books.error;
-
   const titles = new Map<string, string>();
-  for (const movie of movies.data ?? []) titles.set(movie.id, movie.title);
-  for (const book of books.data ?? []) titles.set(book.id, book.title);
+  for (const movie of movies) titles.set(movie.id, movie.title);
+  for (const book of books) titles.set(book.id, book.title);
 
   return rows.map((row) => ({
     ...row,

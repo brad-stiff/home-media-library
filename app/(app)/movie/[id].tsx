@@ -1,26 +1,20 @@
-import { Image } from 'expo-image';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 
-import { PrimaryButton } from '../../../components/PrimaryButton';
+import { ApiCredit } from '../../../components/ApiCredit';
 import { CheckoutPanel } from '../../../components/CheckoutPanel';
-import { useAuth } from '../../../lib/auth';
+import { DetailHeader, DetailScroll, DetailSection } from '../../../components/DetailLayout';
 import { LoanHistory } from '../../../components/LoanHistory';
+import { MoviePoster } from '../../../components/MoviePoster';
+import { PrimaryButton } from '../../../components/PrimaryButton';
+import { useAuth } from '../../../lib/auth';
 import { Checkout, getActiveCheckout, listItemCheckouts } from '../../../lib/checkouts';
 import { listHouseholdMembers } from '../../../lib/household';
 import { useHousehold } from '../../../lib/householdContext';
 import { deleteMovie, getMovieById } from '../../../lib/movies';
-import { ApiCredit } from '../../../components/ApiCredit';
 import { attributionName, canDeleteOwned, canEditHouseholdFacts, isWriter } from '../../../lib/roles';
-import { backdropUrl, formatRuntime, radius, spacing, useTheme } from '../../../lib/theme';
+import { formatRuntime, radius, spacing, useTheme } from '../../../lib/theme';
 import { formatOwnershipLabel, Movie } from '../../../lib/types';
 
 export default function MovieDetailScreen() {
@@ -56,16 +50,10 @@ export default function MovieDetailScreen() {
           if (active) {
             setMovie(result);
             const memberIds = new Set(members.map((member) => member.userId));
-            setCanEdit(
-              result != null && canEditHouseholdFacts(household.role, result.addedBy, memberIds),
-            );
-            setCanDelete(
-              result != null && canDeleteOwned(household.role, result.addedBy, user?.id ?? null),
-            );
+            setCanEdit(result != null && canEditHouseholdFacts(household.role, result.addedBy, memberIds));
+            setCanDelete(result != null && canDeleteOwned(household.role, result.addedBy, user?.id ?? null));
             setCanLend(isWriter(household.role));
-            setAddedByLabel(
-              result ? attributionName(result.addedBy, members, result.addedByName) : null,
-            );
+            setAddedByLabel(result ? attributionName(result.addedBy, members, result.addedByName) : null);
             setActiveCheckout(checkout);
             setLoanHistory(history);
           }
@@ -100,8 +88,7 @@ export default function MovieDetailScreen() {
             await deleteMovie(movie.id);
             router.back();
           } catch (error) {
-            const message =
-              error instanceof Error ? error.message : 'Could not remove this movie.';
+            const message = error instanceof Error ? error.message : 'Could not remove this movie.';
             Alert.alert('Error', message);
             setDeleting(false);
           }
@@ -126,127 +113,99 @@ export default function MovieDetailScreen() {
     );
   }
 
-  const backdrop = backdropUrl(movie.backdropPath);
   const ownershipLabel = formatOwnershipLabel(movie);
   const lendingOn = household?.lendingEnabled !== false;
+  const subtitle = [movie.year, formatRuntime(movie.runtime)].filter(Boolean).join(' · ');
 
   return (
     <>
-      <Stack.Screen options={{ title: movie.title }} />
-      <ScrollView contentContainerStyle={styles.content}>
-        {backdrop ? (
-          <Image source={{ uri: backdrop }} style={styles.backdrop} contentFit="cover" />
-        ) : (
-          <View style={[styles.backdrop, { backgroundColor: colors.surfaceElevated }]} />
-        )}
+      <Stack.Screen options={{ title: '' }} />
+      <DetailScroll>
+        <DetailHeader
+          art={<MoviePoster posterPath={movie.posterPath} title={movie.title} size="sm" />}
+          title={movie.title}
+          subtitle={subtitle || null}
+        />
 
-        <View style={styles.body}>
-          <View style={styles.headerRow}>
-            <View style={styles.metaBlock}>
-              <Text style={[styles.title, { color: colors.text }]}>{movie.title}</Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                {[movie.year, formatRuntime(movie.runtime)].filter(Boolean).join(' · ')}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.ownershipRow}>
-            {movie.hasBluray ? (
-              <View style={[styles.formatBadge, { backgroundColor: colors.accentMuted }]}>
-                <Text style={[styles.formatText, { color: colors.accent }]}>Blu-ray</Text>
-              </View>
-            ) : null}
-            {movie.has4k ? (
-              <View style={[styles.formatBadge, { backgroundColor: colors.accentMuted }]}>
-                <Text style={[styles.formatText, { color: colors.accent }]}>4K</Text>
-              </View>
-            ) : null}
-            {movie.hasDigital ? (
-              <View style={[styles.formatBadge, { backgroundColor: colors.accentMuted }]}>
-                <Text style={[styles.formatText, { color: colors.accent }]}>Digital</Text>
-              </View>
-            ) : null}
-            {movie.platform?.trim() ? (
-              <View style={[styles.formatBadge, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }]}>
-                <Text style={[styles.formatText, { color: colors.textSecondary }]}>
-                  {movie.platform.trim()}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          {movie.genres.length > 0 ? (
-            <View style={styles.genreRow}>
-              {movie.genres.map((genre) => (
-                <View
-                  key={genre}
-                  style={[styles.genreChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                >
-                  <Text style={[styles.genreText, { color: colors.textSecondary }]}>{genre}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
-
-          {movie.overview ? (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Overview</Text>
-              <Text style={[styles.overview, { color: colors.textSecondary }]}>{movie.overview}</Text>
-            </View>
-          ) : null}
-
-          {lendingOn || activeCheckout ? (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Lending</Text>
-              <CheckoutPanel
-                itemType="movie"
-                itemId={movie.id}
-                activeCheckout={activeCheckout}
-                onChanged={(next) => {
-                  setActiveCheckout(next);
-                  void listItemCheckouts('movie', movie.id).then(setLoanHistory);
-                }}
-                canWrite={canLend}
-                allowCheckout={movie.hasBluray || movie.has4k}
-                lendingEnabled={lendingOn}
-              />
-              {lendingOn ? <LoanHistory loans={loanHistory} /> : null}
-            </View>
-          ) : null}
-
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>In your library</Text>
-            <Text style={[styles.addedText, { color: colors.textSecondary }]}>
-              {ownershipLabel}
-            </Text>
-            <Text style={[styles.addedText, { color: colors.textSecondary }]}>
-              Added {new Date(movie.addedAt).toLocaleDateString()}
-              {addedByLabel ? ` · ${addedByLabel}` : ''}
-            </Text>
-          </View>
-
-          {canEdit ? (
-            <PrimaryButton label="Edit formats" onPress={() => router.push(`/edit-movie?id=${movie.id}`)} />
-          ) : null}
-
-          {canDelete ? (
-            <PrimaryButton
-              label="Remove from Library"
-              onPress={handleDelete}
-              loading={deleting}
-              variant="danger"
-            />
-          ) : (
-            <Text style={[styles.addedText, { color: colors.textTertiary }]}>
-              {canLend
-                ? 'You can remove movies you added. Admins can remove any movie.'
-                : 'Viewers can browse this movie.'}
-            </Text>
-          )}
-          <ApiCredit providers={['tmdb']} />
+        <View style={styles.ownershipRow}>
+          {movie.hasBluray ? <FormatBadge label="Blu-ray" /> : null}
+          {movie.has4k ? <FormatBadge label="4K" /> : null}
+          {movie.hasDigital ? <FormatBadge label="Digital" /> : null}
+          {movie.platform?.trim() ? <FormatBadge label={movie.platform.trim()} muted /> : null}
         </View>
-      </ScrollView>
+
+        {movie.genres.length > 0 ? (
+          <View style={styles.genreRow}>
+            {movie.genres.map((genre) => (
+              <View
+                key={genre}
+                style={[styles.genreChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
+                <Text style={[styles.genreText, { color: colors.textSecondary }]}>{genre}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        {movie.overview ? (
+          <DetailSection title="Overview">
+            <Text style={[styles.body, { color: colors.textSecondary }]}>{movie.overview}</Text>
+          </DetailSection>
+        ) : null}
+
+        {lendingOn || activeCheckout ? (
+          <DetailSection title="Lending">
+            <CheckoutPanel
+              itemType="movie"
+              itemId={movie.id}
+              activeCheckout={activeCheckout}
+              onChanged={(next) => {
+                setActiveCheckout(next);
+                void listItemCheckouts('movie', movie.id).then(setLoanHistory);
+              }}
+              canWrite={canLend}
+              allowCheckout={movie.hasBluray || movie.has4k}
+              lendingEnabled={lendingOn}
+            />
+            {lendingOn ? <LoanHistory loans={loanHistory} /> : null}
+          </DetailSection>
+        ) : null}
+
+        <DetailSection title="In your library">
+          <Text style={[styles.body, { color: colors.textSecondary }]}>{ownershipLabel}</Text>
+          <Text style={[styles.body, { color: colors.textSecondary }]}>
+            Added {new Date(movie.addedAt).toLocaleDateString()}
+            {addedByLabel ? ` · ${addedByLabel}` : ''}
+          </Text>
+        </DetailSection>
+
+        {canEdit ? (
+          <PrimaryButton label="Edit formats" onPress={() => router.push(`/edit-movie?id=${movie.id}`)} />
+        ) : null}
+
+        {canDelete ? (
+          <PrimaryButton label="Remove from library" onPress={handleDelete} loading={deleting} variant="danger" />
+        ) : null}
+        <ApiCredit providers={['tmdb']} />
+      </DetailScroll>
     </>
+  );
+}
+
+function FormatBadge({ label, muted = false }: { label: string; muted?: boolean }) {
+  const { colors } = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.formatBadge,
+        muted
+          ? { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth }
+          : { backgroundColor: colors.accentMuted },
+      ]}
+    >
+      <Text style={[styles.formatText, { color: muted ? colors.textSecondary : colors.accent }]}>{label}</Text>
+    </View>
   );
 }
 
@@ -256,34 +215,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: {
-    paddingBottom: spacing.xl,
-  },
-  backdrop: {
-    width: '100%',
-    height: 220,
-  },
   body: {
-    padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  metaBlock: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    lineHeight: 32,
-  },
-  subtitle: {
     fontSize: 16,
-    fontWeight: '500',
+    lineHeight: 24,
   },
   ownershipRow: {
     flexDirection: 'row',
@@ -313,19 +247,5 @@ const styles = StyleSheet.create({
   genreText: {
     fontSize: 13,
     fontWeight: '500',
-  },
-  section: {
-    gap: spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  overview: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  addedText: {
-    fontSize: 15,
   },
 });

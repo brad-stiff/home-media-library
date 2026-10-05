@@ -1,9 +1,9 @@
-import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ApiCredit } from '../../../components/ApiCredit';
+import { MoviePoster } from '../../../components/MoviePoster';
 import { MediaGate } from '../../../components/MediaGate';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { WriterOnly } from '../../../components/WriterOnly';
@@ -48,11 +48,7 @@ function ConfirmBookScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      {book.coverUrl ? (
-        <Image source={{ uri: book.coverUrl }} style={styles.cover} contentFit="cover" />
-      ) : (
-        <View style={[styles.cover, { backgroundColor: colors.surfaceElevated }]} />
-      )}
+      <MoviePoster uri={book.coverUrl} title={book.title} size="lg" style={styles.cover} />
       <Text style={[styles.title, { color: colors.text }]}>{book.title}</Text>
       {book.authors.length > 0 ? (
         <Text style={[styles.meta, { color: colors.textSecondary }]}>

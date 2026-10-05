@@ -13,6 +13,7 @@ import { AppearanceContext, AppearancePreference } from './appearanceContext';
 import { useAuth } from './auth';
 import { HouseholdMembership } from './household';
 import { LibraryViewPrefs, parseLibraryView, defaultLibraryView } from './libraryView';
+import { Json } from './database.types';
 import { supabase } from './supabase';
 
 export type MediaType = 'movies' | 'books' | 'mtg';
@@ -196,7 +197,7 @@ export function ProfileProvider({ children }: PropsWithChildren) {
       const previous = profile.libraryView;
       setProfile((prev) => ({ ...prev, libraryView }));
 
-      const { error } = await supabase.from('profiles').update({ library_view: libraryView }).eq('id', user.id);
+      const { error } = await supabase.from('profiles').update({ library_view: libraryView as Json }).eq('id', user.id);
       if (error) {
         setProfile((prev) => ({ ...prev, libraryView: previous }));
         throw error;

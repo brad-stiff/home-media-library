@@ -1,31 +1,27 @@
-import { Image } from 'expo-image';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 
-import { PrimaryButton } from '../../../components/PrimaryButton';
+import { ApiCredit } from '../../../components/ApiCredit';
 import { CheckoutPanel } from '../../../components/CheckoutPanel';
+import { DetailHeader, DetailScroll, DetailSection } from '../../../components/DetailLayout';
+import { LoanHistory } from '../../../components/LoanHistory';
+import { MoviePoster } from '../../../components/MoviePoster';
+import { PrimaryButton } from '../../../components/PrimaryButton';
 import { useAuth } from '../../../lib/auth';
 import { Book, deleteBook, getBookById, refreshBookFromOpenLibrary } from '../../../lib/books';
-import { LoanHistory } from '../../../components/LoanHistory';
 import { Checkout, getActiveCheckout, listItemCheckouts } from '../../../lib/checkouts';
 import { listHouseholdMembers } from '../../../lib/household';
 import { useHousehold } from '../../../lib/householdContext';
-import { ApiCredit } from '../../../components/ApiCredit';
 import { attributionName, canDeleteOwned, canEditHouseholdFacts, isWriter } from '../../../lib/roles';
-import { spacing, useTheme } from '../../../lib/theme';
+import { useTheme } from '../../../lib/theme';
+import { useToast } from '../../../lib/toast';
 
 export default function BookDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const { user } = useAuth();
   const { household } = useHousehold();
   const [book, setBook] = useState<Book | null>(null);
@@ -55,16 +51,10 @@ export default function BookDetailScreen() {
           if (active) {
             setBook(result);
             const memberIds = new Set(members.map((member) => member.userId));
-            setCanEdit(
-              result != null && canEditHouseholdFacts(household.role, result.addedBy, memberIds),
-            );
-            setCanDelete(
-              result != null && canDeleteOwned(household.role, result.addedBy, user?.id ?? null),
-            );
+            setCanEdit(result != null && canEditHouseholdFacts(household.role, result.addedBy, memberIds));
+            setCanDelete(result != null && canDeleteOwned(household.role, result.addedBy, user?.id ?? null));
             setCanLend(isWriter(household.role));
-            setAddedByLabel(
-              result ? attributionName(result.addedBy, members, result.addedByName) : null,
-            );
+            setAddedByLabel(result ? attributionName(result.addedBy, members, result.addedByName) : null);
             setActiveCheckout(checkout);
             setLoanHistory(history);
           }
@@ -111,7 +101,7 @@ export default function BookDetailScreen() {
     setRefreshing(true);
     try {
       setBook(await refreshBookFromOpenLibrary(book));
-      Alert.alert('Updated', 'Book details were refreshed from Open Library.');
+      showToast('Book details updated');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not refresh this book.';
       Alert.alert('Error', message);
@@ -137,46 +127,51 @@ export default function BookDetailScreen() {
   }
 
   const lendingOn = household?.lendingEnabled !== false;
+  const subtitle = [book.authors.join(', '), book.year].filter(Boolean).join(' · ');
 
   return (
     <>
-      <Stack.Screen options={{ title: book.title }} />
-      <ScrollView contentContainerStyle={styles.content}>
-        {book.coverUrl ? (
-          <Image source={{ uri: book.coverUrl }} style={styles.cover} contentFit="cover" />
-        ) : (
-          <View style={[styles.cover, { backgroundColor: colors.surfaceElevated }]} />
-        )}
-        <Text style={[styles.title, { color: colors.text }]}>{book.title}</Text>
-        {book.authors.length > 0 ? (
-          <Text style={[styles.meta, { color: colors.textSecondary }]}>
-            {book.authors.join(', ')}
-          </Text>
-        ) : null}
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>
-          {[book.year, book.isbn ? `ISBN ${book.isbn}` : null].filter(Boolean).join(' · ')}
-        </Text>
+      <Stack.Screen options={{ title: '' }} />
+      <DetailScroll>
+        <DetailHeader
+          art={<MoviePoster uri={book.coverUrl} title={book.title} size="sm" />}
+          title={book.title}
+          subtitle={subtitle || null}
+        />
+
         {book.overview ? (
-          <Text style={[styles.overview, { color: colors.textSecondary }]}>{book.overview}</Text>
+          <DetailSection title="Overview">
+            <Text style={[styles.body, { color: colors.textSecondary }]}>{book.overview}</Text>
+          </DetailSection>
         ) : null}
-        <Text style={[styles.meta, { color: colors.textTertiary }]}>
-          Added {new Date(book.addedAt).toLocaleDateString()}
-          {addedByLabel ? ` · ${addedByLabel}` : ''}
-        </Text>
+
         {lendingOn || activeCheckout ? (
-          <CheckoutPanel
-            itemType="book"
-            itemId={book.id}
-            activeCheckout={activeCheckout}
-            onChanged={(next) => {
-              setActiveCheckout(next);
-              void listItemCheckouts('book', book.id).then(setLoanHistory);
-            }}
-            canWrite={canLend}
-            lendingEnabled={lendingOn}
-          />
+          <DetailSection title="Lending">
+            <CheckoutPanel
+              itemType="book"
+              itemId={book.id}
+              activeCheckout={activeCheckout}
+              onChanged={(next) => {
+                setActiveCheckout(next);
+                void listItemCheckouts('book', book.id).then(setLoanHistory);
+              }}
+              canWrite={canLend}
+              lendingEnabled={lendingOn}
+            />
+            {lendingOn ? <LoanHistory loans={loanHistory} /> : null}
+          </DetailSection>
         ) : null}
-        {lendingOn ? <LoanHistory loans={loanHistory} /> : null}
+
+        <DetailSection title="In your library">
+          {book.isbn ? (
+            <Text style={[styles.body, { color: colors.textSecondary }]}>ISBN {book.isbn}</Text>
+          ) : null}
+          <Text style={[styles.body, { color: colors.textSecondary }]}>
+            Added {new Date(book.addedAt).toLocaleDateString()}
+            {addedByLabel ? ` · ${addedByLabel}` : ''}
+          </Text>
+        </DetailSection>
+
         {canEdit ? (
           <PrimaryButton
             label="Refresh from Open Library"
@@ -186,21 +181,10 @@ export default function BookDetailScreen() {
           />
         ) : null}
         {canDelete ? (
-          <PrimaryButton
-            label="Remove from Library"
-            onPress={handleDelete}
-            loading={deleting}
-            variant="danger"
-          />
-        ) : (
-          <Text style={{ color: colors.textTertiary }}>
-            {canLend
-              ? 'You can remove books you added. Admins can remove any book.'
-              : 'Viewers can browse this book.'}
-            </Text>
-        )}
+          <PrimaryButton label="Remove from library" onPress={handleDelete} loading={deleting} variant="danger" />
+        ) : null}
         <ApiCredit providers={['openLibrary']} />
-      </ScrollView>
+      </DetailScroll>
     </>
   );
 }
@@ -211,26 +195,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: {
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  cover: {
-    width: 180,
-    height: 270,
-    borderRadius: 8,
-    alignSelf: 'center',
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  meta: {
-    fontSize: 15,
-    textAlign: 'center',
-  },
-  overview: {
+  body: {
     fontSize: 16,
     lineHeight: 24,
   },

@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -15,6 +14,7 @@ import {
 } from 'react-native';
 
 import { ApiCredit } from '../../components/ApiCredit';
+import { MoviePoster } from '../../components/MoviePoster';
 import { MediaGate } from '../../components/MediaGate';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { WriterOnly } from '../../components/WriterOnly';
@@ -87,19 +87,7 @@ function AddBookScreen() {
       >
         <ScrollView contentContainerStyle={styles.confirmContent} keyboardShouldPersistTaps="handled">
           <View style={styles.confirmHeader}>
-            {selected.coverUrl ? (
-              <Image source={{ uri: selected.coverUrl }} style={styles.cover} contentFit="cover" />
-            ) : (
-              <View
-                style={[
-                  styles.cover,
-                  styles.coverPlaceholder,
-                  { backgroundColor: colors.surfaceElevated },
-                ]}
-              >
-                <Text style={{ color: colors.textTertiary, fontSize: 12 }}>No cover</Text>
-              </View>
-            )}
+            <MoviePoster uri={selected.coverUrl} title={selected.title} size="sm" style={styles.cover} />
             <View style={styles.confirmMeta}>
               <Text style={[styles.confirmTitle, { color: colors.text }]}>{selected.title}</Text>
               <Text style={[styles.confirmSubtitle, { color: colors.textSecondary }]}>
@@ -175,19 +163,7 @@ function AddBookScreen() {
                 },
               ]}
             >
-              {item.coverUrl ? (
-                <Image source={{ uri: item.coverUrl }} style={styles.resultCover} contentFit="cover" />
-              ) : (
-                <View
-                  style={[
-                    styles.resultCover,
-                    styles.coverPlaceholder,
-                    { backgroundColor: colors.surfaceElevated },
-                  ]}
-                >
-                  <Text style={{ color: colors.textTertiary, fontSize: 10 }}>No art</Text>
-                </View>
-              )}
+              <MoviePoster uri={item.coverUrl} title={item.title} size="sm" style={styles.resultCover} />
               <View style={styles.resultMeta}>
                 <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={2}>
                   {item.title}

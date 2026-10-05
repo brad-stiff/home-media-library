@@ -32,6 +32,13 @@ function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [manualCode, setManualCode] = useState('');
   const [resolving, setResolving] = useState(false);
+  const [failure, setFailure] = useState<{
+    title: string;
+    message: string;
+    searchLabel?: string;
+    searchPath?: '/add' | '/add-book';
+    searchQuery?: string;
+  } | null>(null);
   const lockedRef = useRef(false);
 
   const handleResolved = useCallback(
@@ -41,6 +48,7 @@ function ScanScreen() {
 
       lockedRef.current = true;
       setResolving(true);
+      setFailure(null);
       try {
         const result = await resolveBarcode(code);
 
@@ -77,37 +85,20 @@ function ScanScreen() {
 
         const searchBooks = isIsbn(result.barcode);
         const canSearch = searchBooks ? booksOn : moviesOn;
-        Alert.alert('No match', result.reason, [
+        setFailure({
+          title: 'No match',
+          message: result.reason,
           ...(canSearch
-            ? [
-                {
-                  text: searchBooks ? 'Search books' : 'Search movies',
-                  onPress: () =>
-                    router.replace({
-                      pathname: searchBooks ? '/add-book' : '/add',
-                      params: result.suggestedQuery ? { q: result.suggestedQuery } : undefined,
-                    }),
-                },
-              ]
-            : []),
-          {
-            text: 'Scan again',
-            style: 'cancel',
-            onPress: () => {
-              lockedRef.current = false;
-            },
-          },
-        ]);
+            ? {
+                searchLabel: searchBooks ? 'Search books' : 'Search movies',
+                searchPath: searchBooks ? ('/add-book' as const) : ('/add' as const),
+                searchQuery: result.suggestedQuery ?? undefined,
+              }
+            : {}),
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Could not resolve barcode.';
-        Alert.alert('Scan failed', message, [
-          {
-            text: 'OK',
-            onPress: () => {
-              lockedRef.current = false;
-            },
-          },
-        ]);
+        setFailure({ title: 'Scan failed', message });
       } finally {
         setResolving(false);
       }
@@ -176,6 +167,33 @@ function ScanScreen() {
           </View>
         ) : (
           <>
+            {failure ? (
+              <View style={styles.failure}>
+                <Text style={[styles.failureTitle, { color: colors.text }]}>{failure.title}</Text>
+                <Text style={[styles.failureBody, { color: colors.textSecondary }]}>{failure.message}</Text>
+                <PrimaryButton
+                  label="Scan again"
+                  onPress={() => {
+                    lockedRef.current = false;
+                    setFailure(null);
+                  }}
+                />
+                {failure.searchPath ? (
+                  <Pressable
+                    onPress={() =>
+                      router.replace({
+                        pathname: failure.searchPath!,
+                        params: failure.searchQuery ? { q: failure.searchQuery } : undefined,
+                      })
+                    }
+                    accessibilityRole="button"
+                    style={styles.secondary}
+                  >
+                    <Text style={{ color: colors.accent, fontWeight: '600' }}>{failure.searchLabel}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
             <Text style={[styles.manualLabel, { color: colors.textSecondary }]}>
               Or enter code manually
             </Text>
@@ -302,6 +320,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
+  },
+  failure: {
+    gap: spacing.sm,
+  },
+  failureTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  failureBody: {
+    fontSize: 15,
+    lineHeight: 20,
   },
   secondary: {
     alignItems: 'center',

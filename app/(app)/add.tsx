@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -183,23 +182,12 @@ function AddMovieScreen() {
                 },
               ]}
             >
-              {item.poster_path ? (
-                <Image
-                  source={{ uri: `https://image.tmdb.org/t/p/w92${item.poster_path}` }}
-                  style={styles.resultPoster}
-                  contentFit="cover"
-                />
-              ) : (
-                <View
-                  style={[
-                    styles.resultPoster,
-                    styles.resultPosterPlaceholder,
-                    { backgroundColor: colors.surfaceElevated },
-                  ]}
-                >
-                  <Text style={{ color: colors.textTertiary, fontSize: 10 }}>No art</Text>
-                </View>
-              )}
+              <MoviePoster
+                posterPath={item.poster_path}
+                title={item.title}
+                size="sm"
+                style={styles.resultPoster}
+              />
               <View style={styles.resultMeta}>
                 <Text style={[styles.resultTitle, { color: colors.text }]} numberOfLines={2}>
                   {item.title}

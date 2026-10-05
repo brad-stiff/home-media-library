@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { radius, spacing, typeScale, useTheme } from '../lib/theme';
+import { PlusIcon } from './icons';
 
 export type FabAction = {
   id: string;
@@ -73,7 +74,11 @@ export function LibraryFab({ actions, bottom }: { actions: FabAction[]; bottom: 
           { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
         ]}
       >
-        <Text style={[styles.plus, { color: colors.accentText }]}>{open ? '×' : '+'}</Text>
+        {open ? (
+          <Text style={[styles.plus, { color: colors.accentText }]}>×</Text>
+        ) : (
+          <PlusIcon color={colors.accentText} />
+        )}
       </Pressable>
     </View>
   );

@@ -1,4 +1,6 @@
 import { ContactDraft, normalizeContactDraft } from './contactRules';
+import { Tables } from './database.types';
+import { pageAll } from './pageAll';
 import { supabase } from './supabase';
 
 export type Contact = {
@@ -14,18 +16,7 @@ export type Contact = {
   updatedAt: string;
 };
 
-type ContactRow = {
-  id: string;
-  household_id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  sms_reminders: boolean;
-  linked_user_id: string | null;
-  app_invited_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
+type ContactRow = Tables<'contacts'>;
 
 function rowToContact(row: ContactRow): Contact {
   return {
@@ -43,15 +34,21 @@ function rowToContact(row: ContactRow): Contact {
 }
 
 export async function listContacts(): Promise<Contact[]> {
-  const { data, error } = await supabase.from('contacts').select('*').order('name', { ascending: true });
-  if (error) throw error;
-  return ((data as ContactRow[]) ?? []).map(rowToContact);
+  const rows = await pageAll((from, to) =>
+    supabase
+      .from('contacts')
+      .select('*')
+      .order('name', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+  return rows.map(rowToContact);
 }
 
 export async function getContact(id: string): Promise<Contact | null> {
   const { data, error } = await supabase.from('contacts').select('*').eq('id', id).maybeSingle();
   if (error) throw error;
-  return data ? rowToContact(data as ContactRow) : null;
+  return data ? rowToContact(data) : null;
 }
 
 export async function saveContact(id: string | null, draft: ContactDraft): Promise<Contact> {
@@ -66,7 +63,8 @@ export async function saveContact(id: string | null, draft: ContactDraft): Promi
     p_sms_reminders: normalized.value.smsReminders,
   });
   if (error) throw error;
-  return rowToContact(data as ContactRow);
+  if (!data) throw new Error('Could not save this contact.');
+  return rowToContact(data);
 }
 
 export async function deleteContact(id: string): Promise<void> {
@@ -77,5 +75,6 @@ export async function deleteContact(id: string): Promise<void> {
 export async function markContactAppInvite(id: string): Promise<Contact> {
   const { data, error } = await supabase.rpc('mark_contact_app_invite', { p_contact_id: id });
   if (error) throw error;
-  return rowToContact(data as ContactRow);
+  if (!data) throw new Error('Could not invite this contact.');
+  return rowToContact(data);
 }

@@ -11,12 +11,14 @@ import { useHousehold } from '../../lib/householdContext';
 import { getMovieById, refreshMovieFromTmdb, updateMovieOwnership } from '../../lib/movies';
 import { canEditHouseholdFacts } from '../../lib/roles';
 import { spacing, useTheme } from '../../lib/theme';
+import { useToast } from '../../lib/toast';
 import { Movie, MovieOwnership } from '../../lib/types';
 
 function EditMovieScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors } = useTheme();
+  const { showToast } = useToast();
   const { household } = useHousehold();
   const [movie, setMovie] = useState<Movie | null>(null);
   const [ownership, setOwnership] = useState<MovieOwnership | null>(null);
@@ -79,7 +81,7 @@ function EditMovieScreen() {
     try {
       const next = await refreshMovieFromTmdb(movie);
       setMovie(next);
-      Alert.alert('Updated', 'Movie details were refreshed from TMDb.');
+      showToast('Movie details updated');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not refresh from TMDb.';
       Alert.alert('Error', message);

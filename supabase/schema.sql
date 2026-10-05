@@ -2,8 +2,9 @@
 -- Run once in the Supabase SQL Editor for a new project.
 -- The live project is already on this schema. Do not run this file there.
 --
--- Later changes: append a short section at the bottom, run that section once
--- on the live project, then fold it into the statements above.
+-- After that baseline, add a file under supabase/migrations and apply it once
+-- on the live project. Keep this snapshot in sync with those files so a new
+-- project matches the live database.
 
 -- ---------------------------------------------------------------------------
 -- Tables
@@ -1438,6 +1439,107 @@ begin
 end;
 $$;
 
+-- item_id points at movies or books, so it cannot be one foreign key.
+-- Loan history stays when a title is deleted. New loans must name a title
+-- in the same household.
+create function public.checkouts_require_catalog_item()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if tg_op = 'UPDATE'
+     and new.item_id is not distinct from old.item_id
+     and new.item_type is not distinct from old.item_type
+     and new.household_id is not distinct from old.household_id
+  then
+    return new;
+  end if;
+
+  if new.item_type = 'movie' then
+    if not exists (
+      select 1 from public.movies
+      where id = new.item_id and household_id = new.household_id
+    ) then
+      raise exception 'Movie not found in your household';
+    end if;
+  elsif new.item_type = 'book' then
+    if not exists (
+      select 1 from public.books
+      where id = new.item_id and household_id = new.household_id
+    ) then
+      raise exception 'Book not found in your household';
+    end if;
+  else
+    raise exception 'Invalid item type';
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger checkouts_require_catalog_item
+  before insert or update on public.checkouts
+  for each row execute function public.checkouts_require_catalog_item();
+
+-- Any member can fill a blank color identity. Quantity and other columns stay put.
+create function public.fill_mtg_color_identities(p_cards jsonb)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hid uuid := public.current_household_id();
+  updated_count integer := 0;
+  entry jsonb;
+  card_id uuid;
+  identity text;
+begin
+  if auth.uid() is null then
+    raise exception 'Not authenticated';
+  end if;
+  if hid is null then
+    raise exception 'You are not in a household';
+  end if;
+  if not public.is_household_member(hid) then
+    raise exception 'Not in this household';
+  end if;
+  if p_cards is null or jsonb_typeof(p_cards) <> 'array' then
+    return 0;
+  end if;
+
+  for entry in select value from jsonb_array_elements(p_cards)
+  loop
+    begin
+      card_id := nullif(entry->>'id', '')::uuid;
+    exception
+      when invalid_text_representation then
+        continue;
+    end;
+    if card_id is null or entry->>'color_identity' is null then
+      continue;
+    end if;
+    identity := trim(entry->>'color_identity');
+    if identity !~ '^[WUBRG]*$' or length(identity) > 5 then
+      continue;
+    end if;
+
+    update public.mtg_cards
+    set color_identity = identity
+    where id = card_id
+      and household_id = hid
+      and color_identity is null;
+
+    if found then
+      updated_count := updated_count + 1;
+    end if;
+  end loop;
+
+  return updated_count;
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Row level security
 -- ---------------------------------------------------------------------------
@@ -1585,20 +1687,6 @@ create policy "Members can read household checkouts"
   on public.checkouts for select
   using (public.is_household_member(household_id));
 
-create policy "Writers can insert household checkouts"
-  on public.checkouts for insert
-  with check (
-    public.is_household_writer(household_id)
-    and household_id = public.current_household_id()
-    and returned_at is null
-    and cancelled_at is null
-  );
-
-create policy "Writers can update household checkouts"
-  on public.checkouts for update
-  using (public.is_household_writer(household_id))
-  with check (public.is_household_writer(household_id));
-
 create policy "Members can read household mtg cards"
   on public.mtg_cards for select
   using (public.is_household_member(household_id));
@@ -1698,6 +1786,8 @@ revoke all on function public.delete_contact(uuid) from public, anon;
 revoke all on function public.mark_contact_app_invite(uuid) from public, anon;
 revoke all on function public.checkout_item(text, uuid, uuid, text) from public, anon;
 revoke all on function public.update_checkout_borrower(uuid, uuid) from public, anon;
+revoke all on function public.checkouts_require_catalog_item() from public, anon, authenticated;
+revoke all on function public.fill_mtg_color_identities(jsonb) from public, anon;
 
 grant execute on function public.update_household_name(text) to authenticated;
 grant execute on function public.regenerate_invite_code() to authenticated;
@@ -1718,3 +1808,4 @@ grant execute on function public.checkout_item(text, uuid, uuid, text) to authen
 grant execute on function public.return_item(uuid) to authenticated;
 grant execute on function public.cancel_checkout(uuid) to authenticated;
 grant execute on function public.update_checkout_borrower(uuid, uuid) to authenticated;
+grant execute on function public.fill_mtg_color_identities(jsonb) to authenticated;

@@ -1,5 +1,7 @@
+import { Tables } from './database.types';
 import { getMyHousehold } from './household';
 import { BookLookupResult, lookupBookByIsbn, lookupOpenLibraryKey } from './openLibrary';
+import { pageAll } from './pageAll';
 import { supabase } from './supabase';
 
 export type Book = {
@@ -18,21 +20,7 @@ export type Book = {
   updatedAt: string;
 };
 
-type BookRow = {
-  id: string;
-  household_id: string;
-  isbn: string | null;
-  title: string;
-  authors: string[] | null;
-  year: string | null;
-  cover_url: string | null;
-  overview: string | null;
-  open_library_key: string | null;
-  added_by: string | null;
-  added_by_name: string | null;
-  created_at: string;
-  updated_at: string;
-};
+type BookRow = Tables<'books'>;
 
 function rowToBook(row: BookRow): Book {
   return {
@@ -53,13 +41,15 @@ function rowToBook(row: BookRow): Book {
 }
 
 export async function getAllBooks(): Promise<Book[]> {
-  const { data, error } = await supabase
-    .from('books')
-    .select('*')
-    .order('title', { ascending: true });
-
-  if (error) throw error;
-  return (data as BookRow[]).map(rowToBook);
+  const rows = await pageAll((from, to) =>
+    supabase
+      .from('books')
+      .select('*')
+      .order('title', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+  return rows.map(rowToBook);
 }
 
 export async function searchBooksInLibrary(query: string): Promise<Book[]> {
@@ -78,7 +68,7 @@ export async function searchBooksInLibrary(query: string): Promise<Book[]> {
 export async function getBookById(id: string): Promise<Book | null> {
   const { data, error } = await supabase.from('books').select('*').eq('id', id).maybeSingle();
   if (error) throw error;
-  return data ? rowToBook(data as BookRow) : null;
+  return data ? rowToBook(data) : null;
 }
 
 export async function addBookFromLookup(lookup: BookLookupResult): Promise<Book> {
@@ -109,8 +99,9 @@ export async function addBookFromLookup(lookup: BookLookupResult): Promise<Book>
     }
     throw error;
   }
+  if (!data) throw new Error('Could not save this book.');
 
-  return rowToBook(data as BookRow);
+  return rowToBook(data);
 }
 
 export async function refreshBookFromOpenLibrary(book: Book): Promise<Book> {
@@ -144,8 +135,9 @@ export async function refreshBookFromOpenLibrary(book: Book): Promise<Book> {
     }
     throw error;
   }
+  if (!data) throw new Error('Could not refresh this book.');
 
-  return rowToBook(data as BookRow);
+  return rowToBook(data);
 }
 
 export async function deleteBook(id: string): Promise<void> {

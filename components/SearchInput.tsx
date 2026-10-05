@@ -1,6 +1,7 @@
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import { radius, spacing, useTheme } from '../lib/theme';
+import { SearchIcon } from './icons';
 
 interface SearchInputProps {
   value: string;
@@ -27,6 +28,7 @@ export function SearchInput({
 
   return (
     <View style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <SearchIcon color={colors.placeholder} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -41,7 +43,7 @@ export function SearchInput({
         autoCorrect={false}
         clearButtonMode="while-editing"
         returnKeyType="search"
-        style={[styles.input, { color: colors.text }]}
+        style={[styles.input, { color: colors.text, flex: 1 }]}
       />
     </View>
   );
@@ -53,7 +55,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: spacing.md,
     minHeight: 44,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   input: {
     fontSize: 16,

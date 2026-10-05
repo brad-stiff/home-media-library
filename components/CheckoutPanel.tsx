@@ -2,6 +2,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { ActionMenu } from './ActionMenu';
+import { ChevronIcon } from './icons';
 import { Contact, listContacts } from '../lib/contacts';
 import {
   Checkout,
@@ -239,6 +241,8 @@ function ContactChoices({
   onAdd: () => void;
 }) {
   const { colors } = useTheme();
+  const [open, setOpen] = useState(false);
+  const selected = contacts.find((contact) => contact.id === selectedId);
 
   return (
     <View style={styles.choices}>
@@ -247,36 +251,36 @@ function ContactChoices({
           Add someone outside the household before lending.
         </Text>
       ) : (
-        contacts.map((contact) => {
-          const selected = contact.id === selectedId;
-          return (
-            <Pressable
-              key={contact.id}
-              onPress={() => onSelect(contact.id)}
-              accessibilityRole="button"
-              accessibilityLabel={contact.name}
-              accessibilityState={{ selected }}
-              style={[
-                styles.choice,
-                {
-                  backgroundColor: selected ? colors.accentMuted : colors.background,
-                  borderColor: selected ? colors.accent : colors.border,
-                },
-              ]}
-            >
-              <Text style={{ color: selected ? colors.accent : colors.text, fontWeight: '700' }}>
-                {contact.name}
-              </Text>
-              {contact.linkedUserId ? (
-                <Text style={[styles.choiceMeta, { color: colors.textTertiary }]}>Account linked</Text>
-              ) : null}
-            </Pressable>
-          );
-        })
+        <Pressable
+          onPress={() => setOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={selected ? `Borrower, ${selected.name}` : 'Choose a borrower'}
+          style={[styles.picker, { borderColor: colors.border, backgroundColor: colors.background }]}
+        >
+          <Text style={{ color: selected ? colors.text : colors.textSecondary, fontWeight: '600', flex: 1 }}>
+            {selected?.name ?? 'Choose a borrower'}
+          </Text>
+          <ChevronIcon color={colors.textTertiary} />
+        </Pressable>
       )}
       <Pressable onPress={onAdd} accessibilityRole="button" accessibilityLabel="Add contact" style={styles.add}>
         <Text style={{ color: colors.accent, fontWeight: '700' }}>Add contact</Text>
       </Pressable>
+      <ActionMenu
+        title="Borrower"
+        actions={
+          open
+            ? [
+                ...contacts.map((contact) => ({
+                  label: contact.name,
+                  onPress: () => onSelect(contact.id),
+                })),
+                { label: 'Add contact', onPress: onAdd },
+              ]
+            : null
+        }
+        onClose={() => setOpen(false)}
+      />
     </View>
   );
 }
@@ -305,16 +309,14 @@ const styles = StyleSheet.create({
   choices: {
     gap: spacing.sm,
   },
-  choice: {
+  picker: {
     minHeight: 44,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    justifyContent: 'center',
-  },
-  choiceMeta: {
-    fontSize: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   add: {
     minHeight: 44,

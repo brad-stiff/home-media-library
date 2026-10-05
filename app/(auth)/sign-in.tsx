@@ -73,7 +73,7 @@ export default function SignInScreen() {
           textContentType="password"
         />
 
-        <PrimaryButton label="Sign In" onPress={handleSignIn} loading={loading} />
+        <PrimaryButton label="Sign in" onPress={handleSignIn} loading={loading} />
 
         <AuthLink label="Need an account? Create one" onPress={() => router.push('/(auth)/sign-up')} />
       </ScrollView>

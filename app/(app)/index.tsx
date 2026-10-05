@@ -1,25 +1,18 @@
-import { Image } from 'expo-image';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ApiCredit } from '../../components/ApiCredit';
 import { EmptyState } from '../../components/EmptyState';
-import { HeaderMenu, HeaderMenuItem } from '../../components/HeaderMenu';
+import { HeaderMenu, useAppMenu } from '../../components/HeaderMenu';
 import { FilterChoices, LibraryDock } from '../../components/LibraryDock';
 import { FabAction, LibraryFab } from '../../components/LibraryFab';
-import { MovieGridItem } from '../../components/MovieGridItem';
-import { MtgCardImage } from '../../components/MtgCardImage';
-import { MtgCollectionOverview } from '../../components/MtgCollectionOverview';
+import { BookResults } from '../../components/library/BookResults';
+import { MovieResults } from '../../components/library/MovieResults';
+import { MtgCollectionResults } from '../../components/library/MtgCollectionResults';
+import { MtgDeckResults } from '../../components/library/MtgDeckResults';
 import { SearchInput } from '../../components/SearchInput';
+import { SegmentedControl } from '../../components/SegmentedControl';
 import { Book, searchBooksInLibrary } from '../../lib/books';
 import { Checkout, getActiveCheckoutsByItemIds } from '../../lib/checkouts';
 import { useAuth } from '../../lib/auth';
@@ -32,6 +25,8 @@ import {
   DeckSort,
   DOCK_LABELS,
   DockType,
+  LibraryDensity,
+  LibraryLayout,
   MTG_COLLECTION_SORTS,
   MtgCollectionSort,
   resolveOpeningTab,
@@ -42,15 +37,16 @@ import {
   withTabPrefs,
 } from '../../lib/libraryView';
 import { searchMoviesInLibrary } from '../../lib/movies';
-import { attachColorIdentities, MtgCard, searchMtgCollection, updateMtgCardQty } from '../../lib/mtgCards';
+import { attachColorIdentities, MtgCard, searchMtgCollection } from '../../lib/mtgCards';
 import { cardInSet, cardMatchesQuery, collectionCopyTotal, collectionTypeBars, filterSetSummaries, SetCatalogEntry, summarizeSets } from '../../lib/mtgOverview';
 import { loadMtgSetCatalog } from '../../lib/mtgSets';
 import { listMtgDecks, MtgDeck } from '../../lib/mtgDecks';
+import { takeLibraryTab } from '../../lib/pendingLibraryTab';
 import { isTypeVisible, useProfile } from '../../lib/profile';
-import { canDeleteOwned, isWriter } from '../../lib/roles';
-import { posterUrl, radius, spacing, typeScale, useTheme } from '../../lib/theme';
+import { isWriter } from '../../lib/roles';
+import { spacing, typeScale, useTheme } from '../../lib/theme';
+import { useToastLift } from '../../lib/toast';
 import { Movie } from '../../lib/types';
-import { formatLabel } from '../../lib/deckLegality';
 
 type MtgMode = 'collection' | 'decks';
 type CollectionScreen = 'overview' | 'set' | 'all';
@@ -58,6 +54,16 @@ type CollectionScreen = 'overview' | 'set' | 'all';
 const MTG_MODES: { id: MtgMode; label: string }[] = [
   { id: 'collection', label: 'Collection' },
   { id: 'decks', label: 'Decks' },
+];
+
+const LAYOUTS: { id: LibraryLayout; label: string }[] = [
+  { id: 'grid', label: 'Grid' },
+  { id: 'list', label: 'List' },
+];
+
+const DENSITIES: { id: LibraryDensity; label: string }[] = [
+  { id: 'comfortable', label: 'Comfortable' },
+  { id: 'compact', label: 'Compact' },
 ];
 
 function searchPlaceholder(tab: DockType, mode: MtgMode, collectionScreen: CollectionScreen): string {
@@ -70,6 +76,10 @@ function searchPlaceholder(tab: DockType, mode: MtgMode, collectionScreen: Colle
   return `Search ${DOCK_LABELS[tab].toLowerCase()}`;
 }
 
+function scopeKey(tab: DockType, mode: MtgMode): string {
+  return tab === 'mtg' ? `mtg-${mode}` : tab;
+}
+
 export default function LibraryScreen() {
   const router = useRouter();
   const navigation = useNavigation();
@@ -79,13 +89,13 @@ export default function LibraryScreen() {
   const lendingOn = household?.lendingEnabled !== false;
   const { profile, loading: profileLoading, saveLibraryView } = useProfile();
   const writer = household ? isWriter(household.role) : false;
+  const menu = useAppMenu();
   const [tab, setTab] = useState<DockType | null>(null);
   const [mtgMode, setMtgMode] = useState<MtgMode>('collection');
   const [collectionScreen, setCollectionScreen] = useState<CollectionScreen>('overview');
   const [activeSetCode, setActiveSetCode] = useState<string | null>(null);
   const [setCatalog, setSetCatalog] = useState<Map<string, SetCatalogEntry>>(new Map());
   const [queries, setQueries] = useState<Record<string, string>>({});
-  const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [movies, setMovies] = useState<Movie[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
@@ -93,7 +103,11 @@ export default function LibraryScreen() {
   const [mtgDecks, setMtgDecks] = useState<MtgDeck[]>([]);
   const [checkouts, setCheckouts] = useState<Map<string, Checkout>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [dockHeight, setDockHeight] = useState(160);
+  const [refreshing, setRefreshing] = useState(false);
+  const [dockHeight, setDockHeight] = useState(64);
+  const loadedScopes = useRef(new Set<string>());
+  const loadRequest = useRef(0);
+  useToastLift('library', dockHeight + 72);
 
   const visible = useMemo(() => {
     return visibleDockTabs(profile.libraryView.dockOrder, (type) => {
@@ -144,8 +158,17 @@ export default function LibraryScreen() {
     [profile.libraryView, saveLibraryView],
   );
 
-  const load = useCallback(async (searchQuery: string, activeTab: DockType, mode: MtgMode) => {
-    setLoading(true);
+  const load = useCallback(async (
+    searchQuery: string,
+    activeTab: DockType,
+    mode: MtgMode,
+    reason: 'focus' | 'pull',
+  ) => {
+    const request = ++loadRequest.current;
+    const key = scopeKey(activeTab, mode);
+    const known = loadedScopes.current.has(key);
+    if (!known) setLoading(true);
+    if (reason === 'pull') setRefreshing(true);
     try {
       if (activeTab === 'movies') {
         const results = await searchMoviesInLibrary(searchQuery);
@@ -167,9 +190,7 @@ export default function LibraryScreen() {
         const results = await searchMtgCollection(searchQuery);
         setMtgCards(results);
         try {
-          const filled = await attachColorIdentities(results, (card) =>
-            household != null && canDeleteOwned(household.role, card.addedBy, user?.id ?? null),
-          );
+          const filled = await attachColorIdentities(results);
           setMtgCards(filled);
         } catch {
           // Set, title, and quantity sorts still work if Scryfall is unreachable.
@@ -179,11 +200,16 @@ export default function LibraryScreen() {
         const trimmed = searchQuery.trim().toLowerCase();
         setMtgDecks(trimmed ? decks.filter((deck) => deck.name.toLowerCase().includes(trimmed)) : decks);
       }
+      if (request !== loadRequest.current) return;
+      loadedScopes.current.add(key);
     } catch (error) {
+      if (request !== loadRequest.current) return;
       const message = error instanceof Error ? error.message : 'Could not load library.';
       Alert.alert('Error', message);
     } finally {
+      if (request !== loadRequest.current) return;
       setLoading(false);
+      setRefreshing(false);
     }
   }, [household, user?.id]);
 
@@ -191,10 +217,19 @@ export default function LibraryScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (profileLoading || !household || !tab) return;
-      if (!visible.includes(tab)) return;
-      load(serverQuery, tab, mtgMode);
-    }, [load, serverQuery, tab, mtgMode, profileLoading, household, visible]),
+      if (profileLoading || !household) return;
+      const queued = takeLibraryTab();
+      if (queued && visible.includes(queued)) {
+        if (!loadedScopes.current.has(scopeKey(queued, mtgMode))) setLoading(true);
+        setTab(queued);
+        if (profile.libraryView.lastTab !== queued) {
+          void persist({ ...profile.libraryView, lastTab: queued });
+        }
+        if (queued !== tab) return;
+      }
+      if (!tab || !visible.includes(tab)) return;
+      void load(serverQuery, tab, mtgMode, 'focus');
+    }, [load, serverQuery, tab, mtgMode, profileLoading, household, visible, persist, profile.libraryView]),
   );
 
   useEffect(() => {
@@ -213,18 +248,6 @@ export default function LibraryScreen() {
     };
   }, [tab, mtgMode, mtgCards]);
 
-  const menuItems = useMemo(() => {
-    const items: HeaderMenuItem[] = [{ label: 'Household', onPress: () => router.push('/household') }];
-    if (lendingOn) items.push({ label: 'Loans', onPress: () => router.push('/loans') });
-    items.push(
-      { label: 'Contacts', onPress: () => router.push('/contacts') },
-      { label: 'Settings', onPress: () => router.push('/settings') },
-      { label: 'Account', onPress: () => router.push('/account') },
-      { label: 'About', onPress: () => router.push('/about') },
-    );
-    return items;
-  }, [lendingOn, router]);
-
   const typeBars = useMemo(() => collectionTypeBars(mtgCards), [mtgCards]);
   const copyTotal = useMemo(() => collectionCopyTotal(mtgCards), [mtgCards]);
   const setSummaries = useMemo(() => summarizeSets(mtgCards, setCatalog), [mtgCards, setCatalog]);
@@ -239,26 +262,23 @@ export default function LibraryScreen() {
       ? activeSetName
       : tab === 'mtg' && mtgMode === 'collection' && collectionScreen === 'all'
         ? 'All cards'
-        : 'My Library';
+        : 'My library';
 
   const leaveCollectionDrill = useCallback(() => {
     setCollectionScreen('overview');
     setActiveSetCode(null);
-    setSearchOpen(false);
     setQueries((prev) => ({ ...prev, 'mtg-collection': '' }));
   }, []);
 
   const openSet = useCallback((code: string) => {
     setActiveSetCode(code);
     setCollectionScreen('set');
-    setSearchOpen(false);
     setQueries((prev) => ({ ...prev, 'mtg-collection': '' }));
   }, []);
 
   const openAllCards = useCallback(() => {
     setActiveSetCode(null);
     setCollectionScreen('all');
-    setSearchOpen(false);
     setQueries((prev) => ({ ...prev, 'mtg-collection': '' }));
   }, []);
 
@@ -277,13 +297,13 @@ export default function LibraryScreen() {
             </Pressable>
           )
         : () => null,
-      headerRight: () => <HeaderMenu items={menuItems} />,
+      headerRight: () => <HeaderMenu groups={menu} />,
     });
-  }, [navigation, menuItems, collectionTitle, showCollectionBack, leaveCollectionDrill, colors.accent]);
+  }, [navigation, menu, collectionTitle, showCollectionBack, leaveCollectionDrill, colors.accent]);
 
   const selectTab = (next: DockType) => {
+    if (!loadedScopes.current.has(scopeKey(next, mtgMode))) setLoading(true);
     setTab(next);
-    setSearchOpen(false);
     setFiltersOpen(false);
     if (next !== 'mtg') {
       setCollectionScreen('overview');
@@ -349,19 +369,6 @@ export default function LibraryScreen() {
       }),
     [mtgDecks, profile.libraryView.decks.sort],
   );
-
-  const adjustQty = (card: MtgCard, delta: number) => {
-    const next = card.qty + delta;
-    void (async () => {
-      try {
-        await updateMtgCardQty(card.id, next);
-        if (tab) await load('', tab, 'collection');
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Could not update quantity.';
-        Alert.alert('Error', message);
-      }
-    })();
-  };
 
   const actions: FabAction[] = useMemo(() => {
     if (!writer || !tab) return [];
@@ -429,371 +436,82 @@ export default function LibraryScreen() {
 
   const placeholder = searchPlaceholder(tab, mtgMode, collectionScreen);
   const onCollectionOverview = tab === 'mtg' && mtgMode === 'collection' && collectionScreen === 'overview';
+  const showLayout = tab !== 'mtg' || (mtgMode === 'collection' && !onCollectionOverview);
   const browsingEmpty = query.trim().length === 0 && (tab === 'mtg' || availability === 'all');
   const emptyAction =
     writer && browsingEmpty && actions[0]
       ? { label: actions[0].label, onPress: actions[0].onPress }
       : undefined;
 
-  const filterBits = ['Filters'];
-  if (tab === 'mtg' && mtgMode === 'decks') filterBits.push('Decks');
+  const filterParts: string[] = [];
   if (tab !== 'mtg' && availability !== 'all') {
-    filterBits.push(AVAILABILITY_FILTERS.find((option) => option.id === availability)?.label ?? availability);
+    filterParts.push(AVAILABILITY_FILTERS.find((option) => option.id === availability)?.label ?? availability);
   }
   const activeSort = tab === 'mtg' && mtgMode === 'decks' ? deckSort : tab === 'mtg' ? mtgSort : catalogSort;
   const sortOptions = tab === 'mtg' && mtgMode === 'decks' ? DECK_SORTS : tab === 'mtg' ? MTG_COLLECTION_SORTS : CATALOG_SORTS;
   if (!onCollectionOverview && activeSort !== 'title') {
-    filterBits.push(sortOptions.find((option) => option.id === activeSort)?.label ?? activeSort);
+    filterParts.push(sortOptions.find((option) => option.id === activeSort)?.label ?? activeSort);
   }
+  const filtersNarrowing = filterParts.length > 0;
+  const filtersVisible = filtersNarrowing ? `Filters · ${filterParts.join(' · ')}` : 'Filters';
+  const filtersLabel = filtersNarrowing ? `Filters, ${filterParts.join(', ')}` : 'Filters';
 
-  const listPad = { paddingBottom: spacing.xl + 56 };
+  const listPad = spacing.xl + 56;
+  const credit = <ApiCredit providers={[...creditProviders]} />;
+  const onRefresh = () => {
+    void load(serverQuery, tab, mtgMode, 'pull');
+  };
+  const known = loadedScopes.current.has(scopeKey(tab, mtgMode));
+  const showSpinner = loading && !known;
 
   return (
     <View style={styles.container}>
-      {searchOpen ? (
-        <View style={styles.searchTop}>
-          <SearchInput
-            value={query}
-            autoFocus
-            accessibilityLabel={placeholder}
-            placeholder={placeholder}
-            onChangeText={(text) => setQueries((prev) => ({ ...prev, [scope]: text }))}
-            onSubmitEditing={() => {
-              if (onCollectionOverview && query.trim()) {
-                setActiveSetCode(null);
-                setCollectionScreen('all');
-                setSearchOpen(false);
-              }
+      <View style={styles.searchTop}>
+        <SearchInput
+          value={query}
+          accessibilityLabel={placeholder}
+          placeholder={placeholder}
+          onChangeText={(text) => setQueries((prev) => ({ ...prev, [scope]: text }))}
+          onSubmitEditing={() => {
+            if (onCollectionOverview && query.trim()) {
+              setActiveSetCode(null);
+              setCollectionScreen('all');
+            }
+          }}
+        />
+      </View>
+
+      {tab === 'mtg' ? (
+        <View style={styles.segment}>
+          <SegmentedControl
+            label="MTG"
+            options={MTG_MODES}
+            value={mtgMode}
+            onChange={(mode) => {
+              if (tab && !loadedScopes.current.has(scopeKey(tab, mode))) setLoading(true);
+              setMtgMode(mode);
+              setCollectionScreen('overview');
+              setActiveSetCode(null);
             }}
-            onBlur={() => setSearchOpen(false)}
           />
         </View>
       ) : null}
 
-      <ApiCredit providers={[...creditProviders]} />
+      <Pressable
+        onPress={() => setFiltersOpen((open) => !open)}
+        accessibilityRole="button"
+        accessibilityLabel={filtersLabel}
+        accessibilityState={{ expanded: filtersOpen }}
+        style={styles.filtersButton}
+      >
+        <Text style={[typeScale.label, { color: filtersOpen || filtersNarrowing ? colors.accent : colors.textSecondary, fontSize: 14 }]}>
+          {filtersOpen ? 'Hide filters' : filtersVisible}
+        </Text>
+      </Pressable>
 
-      <View style={styles.results}>
-        {loading ? (
-          <View style={styles.centered}>
-            <ActivityIndicator color={colors.accent} />
-          </View>
-        ) : tab === 'movies' ? (
-          filteredMovies.length === 0 ? (
-            <EmptyState
-              title={query || availability !== 'all' ? 'No matches' : 'No movies yet'}
-              message={
-                writer
-                  ? 'Scan a disc or add a title from TMDb.'
-                  : 'Movies added by your household will show up here.'
-              }
-              action={emptyAction}
-            />
-          ) : layout === 'grid' ? (
-            <FlatList
-              key="movies-grid"
-              data={filteredMovies}
-              keyExtractor={(item) => item.id}
-              numColumns={2}
-              keyboardDismissMode="on-drag"
-              contentContainerStyle={[styles.grid, listPad]}
-              columnWrapperStyle={styles.row}
-              renderItem={({ item }) => (
-                <MovieGridItem
-                  movie={item}
-                  compact={compact}
-                  checkoutLabel={lendingOn ? checkouts.get(item.id)?.borrowerName : undefined}
-                  onPress={() => router.push(`/movie/${item.id}`)}
-                />
-              )}
-            />
-          ) : (
-            <FlatList
-              key="movies-list"
-              data={filteredMovies}
-              keyExtractor={(item) => item.id}
-              keyboardDismissMode="on-drag"
-              contentContainerStyle={[styles.list, listPad]}
-              renderItem={({ item }) => {
-                const loan = lendingOn ? checkouts.get(item.id) : undefined;
-                return (
-                  <Pressable
-                    onPress={() => router.push(`/movie/${item.id}`)}
-                    accessibilityRole="button"
-                    accessibilityLabel={item.title}
-                    style={[styles.listRow, compact && styles.listRowCompact, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  >
-                    {item.posterPath ? (
-                      <Image
-                        source={{ uri: posterUrl(item.posterPath, 'w342') ?? undefined }}
-                        style={compact ? styles.thumbCompact : styles.thumb}
-                        contentFit="cover"
-                      />
-                    ) : (
-                      <View style={[compact ? styles.thumbCompact : styles.thumb, { backgroundColor: colors.surfaceElevated }]} />
-                    )}
-                    <View style={styles.listMeta}>
-                      <Text style={[typeScale.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
-                        {item.title}
-                      </Text>
-                      <Text style={[typeScale.caption, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {[item.year, loan ? `Out · ${loan.borrowerName}` : null].filter(Boolean).join(' · ')}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              }}
-            />
-          )
-        ) : tab === 'books' ? (
-          filteredBooks.length === 0 ? (
-            <EmptyState
-              title={query || availability !== 'all' ? 'No matches' : 'No books yet'}
-              message={
-                writer
-                  ? 'Scan an ISBN or add a title from Open Library.'
-                  : 'Books added by your household will show up here.'
-              }
-              action={emptyAction}
-            />
-          ) : layout === 'grid' ? (
-            <FlatList
-              key="books-grid"
-              data={filteredBooks}
-              keyExtractor={(item) => item.id}
-              numColumns={2}
-              keyboardDismissMode="on-drag"
-              contentContainerStyle={[styles.grid, listPad]}
-              columnWrapperStyle={styles.row}
-              renderItem={({ item }) => {
-                const loan = lendingOn ? checkouts.get(item.id) : undefined;
-                return (
-                  <Pressable
-                    onPress={() => router.push(`/book/${item.id}`)}
-                    accessibilityRole="button"
-                    accessibilityLabel={item.title}
-                    style={({ pressed }) => [styles.bookItem, compact && styles.bookItemCompact, pressed && { opacity: 0.85 }]}
-                  >
-                    <View>
-                      {item.coverUrl ? (
-                        <Image source={{ uri: item.coverUrl }} style={styles.bookCover} contentFit="cover" />
-                      ) : (
-                        <View style={[styles.bookCover, { backgroundColor: colors.surfaceElevated }]} />
-                      )}
-                      {loan ? (
-                        <View style={[styles.bookBadge, { backgroundColor: colors.accent }]}>
-                          <Text style={[styles.bookBadgeText, { color: colors.accentText }]} numberOfLines={1}>
-                            Out · {loan.borrowerName}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Text style={[styles.bookTitle, compact && styles.compactTitle, { color: colors.text }]} numberOfLines={2}>
-                      {item.title}
-                    </Text>
-                  </Pressable>
-                );
-              }}
-            />
-          ) : (
-            <FlatList
-              key="books-list"
-              data={filteredBooks}
-              keyExtractor={(item) => item.id}
-              keyboardDismissMode="on-drag"
-              contentContainerStyle={[styles.list, listPad]}
-              renderItem={({ item }) => {
-                const loan = lendingOn ? checkouts.get(item.id) : undefined;
-                return (
-                  <Pressable
-                    onPress={() => router.push(`/book/${item.id}`)}
-                    accessibilityRole="button"
-                    accessibilityLabel={item.title}
-                    style={[styles.listRow, compact && styles.listRowCompact, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  >
-                    {item.coverUrl ? (
-                      <Image source={{ uri: item.coverUrl }} style={compact ? styles.thumbCompact : styles.thumb} contentFit="cover" />
-                    ) : (
-                      <View style={[compact ? styles.thumbCompact : styles.thumb, { backgroundColor: colors.surfaceElevated }]} />
-                    )}
-                    <View style={styles.listMeta}>
-                      <Text style={[typeScale.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
-                        {item.title}
-                      </Text>
-                      <Text style={[typeScale.caption, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {[item.authors[0], item.year, loan ? `Out · ${loan.borrowerName}` : null].filter(Boolean).join(' · ')}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              }}
-            />
-          )
-        ) : mtgMode === 'collection' ? (
-          mtgCards.length === 0 ? (
-            <EmptyState
-              title="No cards yet"
-              message={
-                writer
-                  ? 'Add a card from Scryfall.'
-                  : 'Cards added by your household will show up here.'
-              }
-              action={emptyAction}
-            />
-          ) : collectionScreen === 'overview' ? (
-            <MtgCollectionOverview
-              bars={typeBars}
-              copies={copyTotal}
-              sets={visibleSets}
-              onOpenSet={openSet}
-              onOpenAll={openAllCards}
-              bottomPad={listPad.paddingBottom}
-              filtering={query.trim().length > 0}
-            />
-          ) : sortedCards.length === 0 ? (
-            <EmptyState
-              title="No matches"
-              message="Try another name, or go back to the collection overview."
-            />
-          ) : (
-            <FlatList
-              key={layout === 'grid' ? 'mtg-grid' : 'mtg-list'}
-              data={sortedCards}
-              keyExtractor={(item) => item.id}
-              numColumns={layout === 'grid' ? 2 : 1}
-              keyboardDismissMode="on-drag"
-              columnWrapperStyle={layout === 'grid' ? styles.row : undefined}
-              contentContainerStyle={layout === 'grid' ? [styles.grid, listPad] : [styles.list, listPad]}
-              renderItem={({ item }) =>
-                layout === 'grid' ? (
-                  <View style={[styles.bookItem, compact && styles.bookItemCompact]}>
-                    <MtgCardImage
-                      uri={item.imageUri}
-                      foil={item.foil}
-                      style={styles.bookCover}
-                      placeholderColor={colors.surfaceElevated}
-                    />
-                    <Text style={[styles.bookTitle, { color: colors.text }]} numberOfLines={2}>
-                      {item.name}
-                      {item.foil ? ' ★' : ''}
-                    </Text>
-                    <View style={styles.qtyRow}>
-                      {household && canDeleteOwned(household.role, item.addedBy, user?.id ?? null) ? (
-                        <Pressable onPress={() => adjustQty(item, -1)} accessibilityRole="button" accessibilityLabel={`Decrease ${item.name}`} style={styles.qtyButton}>
-                          <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 18 }}>−</Text>
-                        </Pressable>
-                      ) : null}
-                      <Text style={[typeScale.body, { color: colors.text, fontWeight: '700' }]}>{item.qty}</Text>
-                      {household && canDeleteOwned(household.role, item.addedBy, user?.id ?? null) ? (
-                        <Pressable onPress={() => adjustQty(item, 1)} accessibilityRole="button" accessibilityLabel={`Increase ${item.name}`} style={styles.qtyButton}>
-                          <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 18 }}>+</Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  </View>
-                ) : (
-                  <View style={[styles.mtgRow, compact && styles.listRowCompact, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <MtgCardImage
-                      uri={item.imageUri}
-                      foil={item.foil}
-                      style={styles.mtgThumb}
-                      placeholderColor={colors.surfaceElevated}
-                    />
-                    <View style={styles.listMeta}>
-                      <Text style={[typeScale.body, { color: colors.text, fontWeight: '600' }]} numberOfLines={2}>
-                        {item.name}
-                        {item.foil ? ' ★' : ''}
-                      </Text>
-                      <Text style={[typeScale.caption, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {[item.setCode?.toUpperCase(), item.collectorNumber, item.typeLine, !item.addedBy && item.addedByName ? 'Deleted account' : null]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </Text>
-                    </View>
-                    <View style={styles.qtyCol}>
-                      {household && canDeleteOwned(household.role, item.addedBy, user?.id ?? null) ? (
-                        <Pressable onPress={() => adjustQty(item, 1)} accessibilityRole="button" accessibilityLabel={`Increase ${item.name}`} style={styles.qtyButton}>
-                          <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 18 }}>+</Text>
-                        </Pressable>
-                      ) : null}
-                      <Text style={{ color: colors.text, fontWeight: '700' }}>{item.qty}</Text>
-                      {household && canDeleteOwned(household.role, item.addedBy, user?.id ?? null) ? (
-                        <Pressable onPress={() => adjustQty(item, -1)} accessibilityRole="button" accessibilityLabel={`Decrease ${item.name}`} style={styles.qtyButton}>
-                          <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 18 }}>−</Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  </View>
-                )
-              }
-            />
-          )
-        ) : sortedDecks.length === 0 ? (
-          <EmptyState
-            title={query ? 'No matches' : 'No decks yet'}
-            message={
-              writer
-                ? 'Create a Commander or Standard deck, or import one from Archidekt.'
-                : 'Decks imported by your household will show up here.'
-            }
-            action={emptyAction}
-          />
-        ) : (
-          <FlatList
-            data={sortedDecks}
-            keyExtractor={(item) => item.id}
-            keyboardDismissMode="on-drag"
-            contentContainerStyle={[styles.list, listPad]}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => router.push(`/mtg/deck/${item.id}`)}
-                accessibilityRole="button"
-                accessibilityLabel={item.name}
-                style={[styles.listRow, compact && styles.listRowCompact, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              >
-                <View style={styles.listMeta}>
-                  <Text style={[typeScale.body, { color: colors.text, fontWeight: '600' }]}>{item.name}</Text>
-                  <Text style={[typeScale.caption, { color: colors.textSecondary }]}>
-                    {[formatLabel(item.format), item.archidektId ? `Archidekt ${item.archidektId}` : null]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </Text>
-                </View>
-                <Text style={[typeScale.label, { color: colors.accent, fontSize: 14 }]}>Open</Text>
-              </Pressable>
-            )}
-          />
-        )}
-      </View>
-
-      <LibraryFab actions={actions} bottom={dockHeight + spacing.sm} />
-
-      <View onLayout={(event) => setDockHeight(event.nativeEvent.layout.height)}>
-        <LibraryDock
-          tabs={visible}
-          activeTab={tab}
-          onTab={selectTab}
-          placeholder={placeholder}
-          query={query}
-          searchOpen={searchOpen}
-          onSearchPress={() => setSearchOpen(true)}
-          onClearSearch={() => setQueries((prev) => ({ ...prev, [scope]: '' }))}
-          filtersOpen={filtersOpen}
-          filtersLabel={filterBits.join(', ')}
-          onToggleFilters={() => setFiltersOpen((open) => !open)}
-        >
-          {tab === 'mtg' ? (
-            <FilterChoices
-              label="Show"
-              options={MTG_MODES}
-              value={mtgMode}
-              onChange={(mode) => {
-                setMtgMode(mode);
-                setSearchOpen(false);
-                setCollectionScreen('overview');
-                setActiveSetCode(null);
-              }}
-            />
-          ) : lendingOn ? (
+      {filtersOpen ? (
+        <View style={styles.filters}>
+          {tab !== 'mtg' && lendingOn ? (
             <FilterChoices
               label="Availability"
               options={AVAILABILITY_FILTERS}
@@ -806,26 +524,130 @@ export default function LibraryScreen() {
             />
           ) : null}
           {onCollectionOverview ? null : (
+            <FilterChoices
+              label="Sort"
+              options={sortOptions}
+              value={activeSort}
+              onChange={(next) => {
+                if (tab === 'mtg' && mtgMode === 'decks') {
+                  void persist({ ...profile.libraryView, decks: { sort: next as DeckSort } });
+                  return;
+                }
+                if (tab === 'mtg') {
+                  void persist(withTabPrefs(profile.libraryView, 'mtg', { sort: next as MtgCollectionSort }));
+                  return;
+                }
+                if (tab === 'movies' || tab === 'books') {
+                  void persist(withTabPrefs(profile.libraryView, tab, { sort: next as CatalogSort }));
+                }
+              }}
+            />
+          )}
+          {showLayout ? (
+            <FilterChoices
+              label="Layout"
+              options={LAYOUTS}
+              value={layout}
+              onChange={(next) => {
+                if (tab === 'movies' || tab === 'books' || tab === 'mtg') {
+                  void persist(withTabPrefs(profile.libraryView, tab, { layout: next }));
+                }
+              }}
+            />
+          ) : null}
           <FilterChoices
-            label="Sort"
-            options={sortOptions}
-            value={activeSort}
+            label="Density"
+            options={DENSITIES}
+            value={profile.libraryView.density}
             onChange={(next) => {
-              if (tab === 'mtg' && mtgMode === 'decks') {
-                void persist({ ...profile.libraryView, decks: { sort: next as DeckSort } });
-                return;
-              }
-              if (tab === 'mtg') {
-                void persist(withTabPrefs(profile.libraryView, 'mtg', { sort: next as MtgCollectionSort }));
-                return;
-              }
-              if (tab === 'movies' || tab === 'books') {
-                void persist(withTabPrefs(profile.libraryView, tab, { sort: next as CatalogSort }));
-              }
+              void persist({ ...profile.libraryView, density: next });
             }}
           />
-          )}
-        </LibraryDock>
+        </View>
+      ) : null}
+
+      <View style={styles.results}>
+        {showSpinner ? (
+          <View style={styles.centered}>
+            <ActivityIndicator color={colors.accent} />
+          </View>
+        ) : tab === 'movies' ? (
+          <MovieResults
+            movies={filteredMovies}
+            query={query}
+            filtering={availability !== 'all'}
+            writer={writer}
+            layout={layout}
+            compact={compact}
+            lendingOn={lendingOn}
+            checkouts={checkouts}
+            emptyAction={emptyAction}
+            bottomPad={listPad}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            footer={credit}
+          />
+        ) : tab === 'books' ? (
+          <BookResults
+            books={filteredBooks}
+            query={query}
+            filtering={availability !== 'all'}
+            writer={writer}
+            layout={layout}
+            compact={compact}
+            lendingOn={lendingOn}
+            checkouts={checkouts}
+            emptyAction={emptyAction}
+            bottomPad={listPad}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            footer={credit}
+          />
+        ) : mtgMode === 'collection' ? (
+          <MtgCollectionResults
+            cards={mtgCards}
+            sortedCards={sortedCards}
+            screen={collectionScreen}
+            writer={writer}
+            layout={layout}
+            compact={compact}
+            typeBars={typeBars}
+            copies={copyTotal}
+            sets={visibleSets}
+            filtering={query.trim().length > 0}
+            onOpenSet={openSet}
+            onOpenAll={openAllCards}
+            emptyAction={emptyAction}
+            bottomPad={listPad}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            footer={credit}
+          />
+        ) : (
+          <MtgDeckResults
+            decks={sortedDecks}
+            query={query}
+            writer={writer}
+            compact={compact}
+            emptyAction={emptyAction}
+            bottomPad={listPad}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            footer={credit}
+          />
+        )}
+      </View>
+
+      <LibraryFab actions={actions} bottom={dockHeight + spacing.sm} />
+
+      <View onLayout={(event) => setDockHeight(event.nativeEvent.layout.height)}>
+        <LibraryDock
+          tabs={visible}
+          activeTab={tab}
+          onTab={selectTab}
+          showLoans={lendingOn}
+          onLoans={() => router.push('/loans')}
+        />
       </View>
     </View>
   );
@@ -843,108 +665,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
   },
+  segment: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  filtersButton: {
+    minHeight: 44,
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  filters: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
   centered: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  grid: {
-    paddingHorizontal: spacing.sm,
-  },
-  row: { justifyContent: 'space-between' },
-  list: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-  },
-  listRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: spacing.sm,
-  },
-  listRowCompact: {
-    padding: spacing.sm,
-    gap: spacing.sm,
-  },
-  listMeta: { flex: 1, gap: 2 },
-  thumb: {
-    width: 48,
-    height: 72,
-    borderRadius: radius.sm,
-  },
-  thumbCompact: {
-    width: 36,
-    height: 54,
-    borderRadius: radius.sm,
-  },
-  bookItem: {
-    flex: 1,
-    margin: spacing.sm,
-    maxWidth: '50%',
-    gap: 4,
-  },
-  bookItemCompact: {
-    margin: spacing.xs,
-  },
-  bookCover: {
-    width: '100%',
-    aspectRatio: 2 / 3,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  bookBadge: {
-    position: 'absolute',
-    left: spacing.xs,
-    right: spacing.xs,
-    bottom: spacing.xs,
-    borderRadius: radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  bookBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  bookTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    lineHeight: 18,
-  },
-  compactTitle: {
-    fontSize: 13,
-    lineHeight: 16,
-  },
-  mtgRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: spacing.sm,
-  },
-  mtgThumb: {
-    width: 44,
-    height: 62,
-    borderRadius: 6,
-  },
-  qtyCol: {
-    alignItems: 'center',
-    gap: 4,
-    minWidth: 44,
-  },
-  qtyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  qtyButton: {
-    minWidth: 44,
-    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

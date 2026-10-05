@@ -14,6 +14,7 @@ import { fetchMyHousehold, HouseholdMembership } from './household';
 type HouseholdContextValue = {
   household: HouseholdMembership | null;
   loading: boolean;
+  error: string | null;
   refresh: () => Promise<void>;
 };
 
@@ -23,18 +24,21 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
   const [household, setHousehold] = useState<HouseholdMembership | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!user) {
       setHousehold(null);
+      setError(null);
       setLoading(false);
       return;
     }
 
     try {
       setHousehold(await fetchMyHousehold());
-    } catch {
-      setHousehold(null);
+      setError(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not load your household.');
     } finally {
       setLoading(false);
     }
@@ -46,8 +50,8 @@ export function HouseholdProvider({ children }: PropsWithChildren) {
   }, [refresh]);
 
   const value = useMemo(
-    () => ({ household, loading, refresh }),
-    [household, loading, refresh],
+    () => ({ household, loading, error, refresh }),
+    [household, loading, error, refresh],
   );
 
   return <HouseholdContext.Provider value={value}>{children}</HouseholdContext.Provider>;

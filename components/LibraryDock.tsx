@@ -1,4 +1,3 @@
-import { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,36 +6,15 @@ import { radius, spacing, typeScale, useTheme } from '../lib/theme';
 
 interface LibraryDockProps {
   tabs: DockType[];
-  activeTab: DockType;
+  activeTab: DockType | 'loans';
   onTab: (tab: DockType) => void;
-  placeholder: string;
-  query: string;
-  searchOpen: boolean;
-  onSearchPress: () => void;
-  onClearSearch: () => void;
-  filtersOpen: boolean;
-  filtersLabel: string;
-  onToggleFilters: () => void;
-  children?: ReactNode;
+  showLoans: boolean;
+  onLoans: () => void;
 }
 
-export function LibraryDock({
-  tabs,
-  activeTab,
-  onTab,
-  placeholder,
-  query,
-  searchOpen,
-  onSearchPress,
-  onClearSearch,
-  filtersOpen,
-  filtersLabel,
-  onToggleFilters,
-  children,
-}: LibraryDockProps) {
+export function LibraryDock({ tabs, activeTab, onTab, showLoans, onLoans }: LibraryDockProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const searchLabel = query ? `${placeholder}, ${query}` : placeholder;
 
   return (
     <View
@@ -49,48 +27,6 @@ export function LibraryDock({
         },
       ]}
     >
-      {searchOpen ? null : (
-        <View style={styles.searchRow}>
-          <Pressable
-            onPress={onSearchPress}
-            accessibilityRole="search"
-            accessibilityLabel={searchLabel}
-            style={[styles.search, { borderColor: colors.border, backgroundColor: colors.background }]}
-          >
-            <Text
-              numberOfLines={1}
-              style={[typeScale.body, { color: query ? colors.text : colors.placeholder }]}
-            >
-              {query || placeholder}
-            </Text>
-          </Pressable>
-          {query ? (
-            <Pressable
-              onPress={onClearSearch}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-              style={styles.clear}
-            >
-              <Text style={[typeScale.label, { color: colors.textSecondary }]}>Clear</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      )}
-
-      {filtersOpen ? <View style={styles.filters}>{children}</View> : null}
-
-      <Pressable
-        onPress={onToggleFilters}
-        accessibilityRole="button"
-        accessibilityLabel={filtersLabel}
-        accessibilityState={{ expanded: filtersOpen }}
-        style={styles.filtersButton}
-      >
-        <Text style={[typeScale.label, { color: filtersOpen ? colors.accent : colors.textSecondary }]}>
-          {filtersOpen ? 'Hide filters' : 'Filters'}
-        </Text>
-      </Pressable>
-
       <View style={styles.tabs} accessibilityRole="tablist">
         {tabs.map((tab) => {
           const active = tab === activeTab;
@@ -103,23 +39,34 @@ export function LibraryDock({
               accessibilityState={{ selected: active }}
               style={styles.tab}
             >
-              <Text
-                style={[
-                  typeScale.label,
-                  { color: active ? colors.accent : colors.textSecondary, fontSize: 14 },
-                ]}
-              >
+              <Text style={[typeScale.label, { color: active ? colors.accent : colors.textSecondary, fontSize: 14 }]}>
                 {DOCK_LABELS[tab]}
               </Text>
-              <View
-                style={[
-                  styles.indicator,
-                  { backgroundColor: active ? colors.accent : 'transparent' },
-                ]}
-              />
+              <View style={[styles.indicator, { backgroundColor: active ? colors.accent : 'transparent' }]} />
             </Pressable>
           );
         })}
+        {showLoans ? (
+          <Pressable
+            onPress={onLoans}
+            accessibilityRole="tab"
+            accessibilityLabel="Loans"
+            accessibilityState={{ selected: activeTab === 'loans' }}
+            style={styles.tab}
+          >
+            <Text
+              style={[
+                typeScale.label,
+                { color: activeTab === 'loans' ? colors.accent : colors.textSecondary, fontSize: 14 },
+              ]}
+            >
+              Loans
+            </Text>
+            <View
+              style={[styles.indicator, { backgroundColor: activeTab === 'loans' ? colors.accent : 'transparent' }]}
+            />
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
@@ -173,39 +120,7 @@ export function FilterChoices<T extends string>({
 const styles = StyleSheet.create({
   dock: {
     borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: spacing.sm,
-    gap: spacing.xs,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-  },
-  search: {
-    flex: 1,
-    minHeight: 44,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.md,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  clear: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filters: {
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-    paddingBottom: spacing.xs,
-  },
-  filtersButton: {
-    minHeight: 44,
-    alignSelf: 'flex-start',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
   },
   tabs: {
     flexDirection: 'row',

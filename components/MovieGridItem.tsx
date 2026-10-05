@@ -1,17 +1,25 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CheckoutMark } from './CheckoutMark';
 import { MoviePoster } from './MoviePoster';
-import { radius, spacing, useTheme } from '../lib/theme';
+import { spacing, useTheme } from '../lib/theme';
 import { formatOwnershipLabel, Movie } from '../lib/types';
 
 interface MovieGridItemProps {
   movie: Movie;
   onPress: () => void;
-  checkoutLabel?: string | null;
+  checkedOut?: boolean;
+  borrowerName?: string | null;
   compact?: boolean;
 }
 
-export function MovieGridItem({ movie, onPress, checkoutLabel, compact = false }: MovieGridItemProps) {
+export function MovieGridItem({
+  movie,
+  onPress,
+  checkedOut = false,
+  borrowerName,
+  compact = false,
+}: MovieGridItemProps) {
   const { colors } = useTheme();
   const ownership = formatOwnershipLabel(movie);
 
@@ -21,18 +29,12 @@ export function MovieGridItem({ movie, onPress, checkoutLabel, compact = false }
       style={({ pressed }) => [styles.container, compact && styles.compact, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={`${movie.title}, ${movie.year ?? 'unknown year'}, ${ownership}${
-        checkoutLabel ? `, checked out to ${checkoutLabel}` : ''
+        borrowerName ? `, checked out to ${borrowerName}` : ''
       }`}
     >
       <View>
         <MoviePoster posterPath={movie.posterPath} title={movie.title} />
-        {checkoutLabel ? (
-          <View style={[styles.badge, { backgroundColor: colors.accent }]}>
-            <Text style={[styles.badgeText, { color: colors.accentText }]} numberOfLines={1}>
-              Out · {checkoutLabel}
-            </Text>
-          </View>
-        ) : null}
+        {checkedOut ? <CheckoutMark /> : null}
       </View>
       <View style={styles.meta}>
         <Text style={[styles.title, compact && styles.compactTitle, { color: colors.text }]} numberOfLines={2}>
@@ -61,20 +63,6 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.85,
-  },
-  badge: {
-    position: 'absolute',
-    left: spacing.xs,
-    right: spacing.xs,
-    bottom: spacing.xs,
-    borderRadius: radius.sm,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    textAlign: 'center',
   },
   meta: {
     marginTop: spacing.sm,

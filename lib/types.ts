@@ -37,32 +37,12 @@ export interface Movie extends MovieOwnership {
   overview: string | null;
   runtime: number | null;
   genres: string[];
+  barcode: string | null;
   addedBy: string | null;
   addedByName: string | null;
   addedAt: string;
   updatedAt: string;
 }
-
-export type MovieRow = {
-  id: string;
-  household_id: string;
-  tmdb_id: number;
-  title: string;
-  year: string | null;
-  poster_path: string | null;
-  backdrop_path: string | null;
-  overview: string | null;
-  runtime: number | null;
-  genres: string[] | null;
-  has_bluray: boolean;
-  has_4k: boolean;
-  has_digital: boolean;
-  platform: string | null;
-  added_by: string | null;
-  added_by_name: string | null;
-  created_at: string;
-  updated_at: string;
-};
 
 export function formatOwnershipLabel(movie: MovieOwnership): string {
   const parts: string[] = [];

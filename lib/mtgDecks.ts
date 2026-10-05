@@ -7,7 +7,9 @@ import {
   isDeckBoard,
   isDeckFormat,
 } from './deckLegality';
+import { Tables } from './database.types';
 import { getMyHousehold } from './household';
+import { pageAll } from './pageAll';
 import {
   ScryfallCard,
   scryfallImageUri,
@@ -68,38 +70,8 @@ export type DeckCardDraft = {
   standardLegality: string | null;
 };
 
-type DeckRow = {
-  id: string;
-  household_id: string;
-  name: string;
-  description: string | null;
-  format: string | null;
-  archidekt_id: string | null;
-  created_by: string | null;
-  created_by_name: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type DeckCardRow = {
-  id: string;
-  deck_id: string;
-  scryfall_id: string;
-  oracle_id: string | null;
-  name: string;
-  image_uri: string | null;
-  mana_cost: string | null;
-  type_line: string | null;
-  qty: number;
-  category: string;
-  is_commander: boolean;
-  board: string | null;
-  foil: boolean | null;
-  color_identity: string | null;
-  oracle_text: string | null;
-  keywords: string[] | null;
-  standard_legality: string | null;
-};
+type DeckRow = Tables<'mtg_decks'>;
+type DeckCardRow = Tables<'mtg_deck_cards'>;
 
 const BOARD_ORDER: Record<DeckBoard, number> = {
   commander: 0,
@@ -239,26 +211,33 @@ export function withScryfallRules(card: MtgDeckCard, scry: ScryfallCard | undefi
 }
 
 export async function listMtgDecks(): Promise<MtgDeck[]> {
-  const { data, error } = await supabase
-    .from('mtg_decks')
-    .select('*')
-    .order('updated_at', { ascending: false });
-
-  if (error) throw error;
-  return ((data as DeckRow[]) ?? []).map(rowToDeck);
+  const rows = await pageAll((from, to) =>
+    supabase
+      .from('mtg_decks')
+      .select('*')
+      .order('updated_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+  return rows.map(rowToDeck);
 }
 
 export async function getMtgDeck(id: string): Promise<MtgDeck | null> {
   const { data, error } = await supabase.from('mtg_decks').select('*').eq('id', id).maybeSingle();
   if (error) throw error;
-  return data ? rowToDeck(data as DeckRow) : null;
+  return data ? rowToDeck(data) : null;
 }
 
 export async function getMtgDeckCards(deckId: string): Promise<MtgDeckCard[]> {
-  const { data, error } = await supabase.from('mtg_deck_cards').select('*').eq('deck_id', deckId);
-
-  if (error) throw error;
-  return ((data as DeckCardRow[]) ?? [])
+  const rows = await pageAll((from, to) =>
+    supabase
+      .from('mtg_deck_cards')
+      .select('*')
+      .eq('deck_id', deckId)
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+  return rows
     .map(rowToDeckCard)
     .sort((a, b) => BOARD_ORDER[a.board] - BOARD_ORDER[b.board] || a.name.localeCompare(b.name));
 }
