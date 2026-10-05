@@ -106,6 +106,20 @@ export async function searchScryfallCards(query: string): Promise<ScryfallCard[]
   }
 }
 
+export type ScryfallSet = {
+  code: string;
+  name: string;
+  icon_svg_uri?: string;
+  released_at?: string | null;
+  printed_size?: number | null;
+  set_type?: string;
+};
+
+export async function listScryfallSets(): Promise<ScryfallSet[]> {
+  const data = await scryfallFetch<{ data?: ScryfallSet[] }>('/sets');
+  return data.data ?? [];
+}
+
 export async function getScryfallCard(id: string): Promise<ScryfallCard> {
   return scryfallFetch<ScryfallCard>(`/cards/${id}`);
 }

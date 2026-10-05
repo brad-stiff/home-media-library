@@ -10,6 +10,7 @@ interface SearchInputProps {
   accessibilityLabel?: string;
   onFocus?: () => void;
   onBlur?: () => void;
+  onSubmitEditing?: () => void;
 }
 
 export function SearchInput({
@@ -20,6 +21,7 @@ export function SearchInput({
   accessibilityLabel = 'Search',
   onFocus,
   onBlur,
+  onSubmitEditing,
 }: SearchInputProps) {
   const { colors } = useTheme();
 
@@ -34,6 +36,7 @@ export function SearchInput({
         accessibilityLabel={accessibilityLabel}
         onFocus={onFocus}
         onBlur={onBlur}
+        onSubmitEditing={onSubmitEditing}
         autoCapitalize="none"
         autoCorrect={false}
         clearButtonMode="while-editing"

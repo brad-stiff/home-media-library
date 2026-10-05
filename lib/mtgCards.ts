@@ -1,4 +1,5 @@
 import { colorIdentityKey } from './deckLegality';
+import { cardMatchesQuery } from './mtgOverview';
 import { getMyHousehold } from './household';
 import { getScryfallCardsByIds, ScryfallCard, scryfallDisplayName, scryfallImageUri } from './scryfall';
 import { supabase } from './supabase';
@@ -80,14 +81,7 @@ export async function getAllMtgCards(): Promise<MtgCard[]> {
 
 export async function searchMtgCollection(query: string): Promise<MtgCard[]> {
   const cards = await getAllMtgCards();
-  const trimmed = query.trim().toLowerCase();
-  if (!trimmed) return cards;
-  return cards.filter((c) => {
-    const haystack = [c.name, c.setCode ?? '', c.setName ?? '', c.typeLine ?? '']
-      .join(' ')
-      .toLowerCase();
-    return haystack.includes(trimmed);
-  });
+  return cards.filter((c) => cardMatchesQuery(c, query));
 }
 
 export async function addMtgCardFromScryfall(

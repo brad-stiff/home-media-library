@@ -18,6 +18,7 @@ import { FilterChoices, LibraryDock } from '../../components/LibraryDock';
 import { FabAction, LibraryFab } from '../../components/LibraryFab';
 import { MovieGridItem } from '../../components/MovieGridItem';
 import { MtgCardImage } from '../../components/MtgCardImage';
+import { MtgCollectionOverview } from '../../components/MtgCollectionOverview';
 import { SearchInput } from '../../components/SearchInput';
 import { Book, searchBooksInLibrary } from '../../lib/books';
 import { Checkout, getActiveCheckoutsByItemIds } from '../../lib/checkouts';
@@ -42,6 +43,8 @@ import {
 } from '../../lib/libraryView';
 import { searchMoviesInLibrary } from '../../lib/movies';
 import { attachColorIdentities, MtgCard, searchMtgCollection, updateMtgCardQty } from '../../lib/mtgCards';
+import { cardInSet, cardMatchesQuery, collectionCopyTotal, collectionTypeBars, filterSetSummaries, SetCatalogEntry, summarizeSets } from '../../lib/mtgOverview';
+import { loadMtgSetCatalog } from '../../lib/mtgSets';
 import { listMtgDecks, MtgDeck } from '../../lib/mtgDecks';
 import { isTypeVisible, useProfile } from '../../lib/profile';
 import { canDeleteOwned, isWriter } from '../../lib/roles';
@@ -50,16 +53,19 @@ import { Movie } from '../../lib/types';
 import { formatLabel } from '../../lib/deckLegality';
 
 type MtgMode = 'collection' | 'decks';
+type CollectionScreen = 'overview' | 'set' | 'all';
 
 const MTG_MODES: { id: MtgMode; label: string }[] = [
   { id: 'collection', label: 'Collection' },
   { id: 'decks', label: 'Decks' },
 ];
 
-function searchPlaceholder(tab: DockType, mode: MtgMode): string {
+function searchPlaceholder(tab: DockType, mode: MtgMode, collectionScreen: CollectionScreen): string {
   if (tab === 'movies') return 'Search movies';
   if (tab === 'books') return 'Search books';
   if (tab === 'mtg' && mode === 'decks') return 'Search decks';
+  if (tab === 'mtg' && collectionScreen === 'overview') return 'Search sets or cards';
+  if (tab === 'mtg' && collectionScreen === 'set') return 'Search this set';
   if (tab === 'mtg') return 'Search collection';
   return `Search ${DOCK_LABELS[tab].toLowerCase()}`;
 }
@@ -75,6 +81,9 @@ export default function LibraryScreen() {
   const writer = household ? isWriter(household.role) : false;
   const [tab, setTab] = useState<DockType | null>(null);
   const [mtgMode, setMtgMode] = useState<MtgMode>('collection');
+  const [collectionScreen, setCollectionScreen] = useState<CollectionScreen>('overview');
+  const [activeSetCode, setActiveSetCode] = useState<string | null>(null);
+  const [setCatalog, setSetCatalog] = useState<Map<string, SetCatalogEntry>>(new Map());
   const [queries, setQueries] = useState<Record<string, string>>({});
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -178,13 +187,31 @@ export default function LibraryScreen() {
     }
   }, [household, user?.id]);
 
+  const serverQuery = tab === 'mtg' && mtgMode === 'collection' ? '' : query;
+
   useFocusEffect(
     useCallback(() => {
       if (profileLoading || !household || !tab) return;
       if (!visible.includes(tab)) return;
-      load(query, tab, mtgMode);
-    }, [load, query, tab, mtgMode, profileLoading, household, visible]),
+      load(serverQuery, tab, mtgMode);
+    }, [load, serverQuery, tab, mtgMode, profileLoading, household, visible]),
   );
+
+  useEffect(() => {
+    if (tab !== 'mtg' || mtgMode !== 'collection' || mtgCards.length === 0) return;
+    let cancelled = false;
+    const codes = mtgCards.map((card) => card.setCode ?? '');
+    void loadMtgSetCatalog(codes)
+      .then((catalog) => {
+        if (!cancelled) setSetCatalog(catalog);
+      })
+      .catch(() => {
+        if (!cancelled) setSetCatalog(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, mtgMode, mtgCards]);
 
   const menuItems = useMemo(() => {
     const items: HeaderMenuItem[] = [{ label: 'Household', onPress: () => router.push('/household') }];
@@ -198,17 +225,70 @@ export default function LibraryScreen() {
     return items;
   }, [lendingOn, router]);
 
+  const typeBars = useMemo(() => collectionTypeBars(mtgCards), [mtgCards]);
+  const copyTotal = useMemo(() => collectionCopyTotal(mtgCards), [mtgCards]);
+  const setSummaries = useMemo(() => summarizeSets(mtgCards, setCatalog), [mtgCards, setCatalog]);
+  const visibleSets = useMemo(
+    () => (collectionScreen === 'overview' ? filterSetSummaries(setSummaries, query) : setSummaries),
+    [collectionScreen, setSummaries, query],
+  );
+  const activeSetName = setSummaries.find((set) => set.code === activeSetCode)?.name ?? 'Set';
+  const showCollectionBack = tab === 'mtg' && mtgMode === 'collection' && collectionScreen !== 'overview';
+  const collectionTitle =
+    tab === 'mtg' && mtgMode === 'collection' && collectionScreen === 'set'
+      ? activeSetName
+      : tab === 'mtg' && mtgMode === 'collection' && collectionScreen === 'all'
+        ? 'All cards'
+        : 'My Library';
+
+  const leaveCollectionDrill = useCallback(() => {
+    setCollectionScreen('overview');
+    setActiveSetCode(null);
+    setSearchOpen(false);
+    setQueries((prev) => ({ ...prev, 'mtg-collection': '' }));
+  }, []);
+
+  const openSet = useCallback((code: string) => {
+    setActiveSetCode(code);
+    setCollectionScreen('set');
+    setSearchOpen(false);
+    setQueries((prev) => ({ ...prev, 'mtg-collection': '' }));
+  }, []);
+
+  const openAllCards = useCallback(() => {
+    setActiveSetCode(null);
+    setCollectionScreen('all');
+    setSearchOpen(false);
+    setQueries((prev) => ({ ...prev, 'mtg-collection': '' }));
+  }, []);
+
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerLeft: () => null,
+      title: collectionTitle,
+      headerLeft: showCollectionBack
+        ? () => (
+            <Pressable
+              onPress={leaveCollectionDrill}
+              accessibilityRole="button"
+              accessibilityLabel="Back to collection overview"
+              style={styles.backButton}
+            >
+              <Text style={[typeScale.body, { color: colors.accent }]}>Back</Text>
+            </Pressable>
+          )
+        : () => null,
       headerRight: () => <HeaderMenu items={menuItems} />,
     });
-  }, [navigation, menuItems]);
+  }, [navigation, menuItems, collectionTitle, showCollectionBack, leaveCollectionDrill, colors.accent]);
 
   const selectTab = (next: DockType) => {
     setTab(next);
     setSearchOpen(false);
     setFiltersOpen(false);
+    if (next !== 'mtg') {
+      setCollectionScreen('overview');
+      setActiveSetCode(null);
+    }
     if (profile.libraryView.lastTab !== next) {
       void persist({ ...profile.libraryView, lastTab: next });
     }
@@ -242,7 +322,14 @@ export default function LibraryScreen() {
 
   const sortedCards = useMemo(
     () =>
-      sortMtgCollection(mtgCards, profile.libraryView.mtg.sort, {
+      sortMtgCollection(
+        mtgCards.filter((card) => {
+          if (collectionScreen === 'set' && activeSetCode && !cardInSet(card, activeSetCode)) return false;
+          if (collectionScreen === 'overview') return false;
+          return cardMatchesQuery(card, query);
+        }),
+        profile.libraryView.mtg.sort,
+        {
         title: (card) => card.name,
         year: () => null,
         addedAt: (card) => card.addedAt,
@@ -251,7 +338,7 @@ export default function LibraryScreen() {
         colorIdentity: (card) => card.colorIdentity,
         qty: (card) => card.qty,
       }),
-    [mtgCards, profile.libraryView.mtg.sort],
+    [mtgCards, profile.libraryView.mtg.sort, collectionScreen, activeSetCode, query],
   );
 
   const sortedDecks = useMemo(
@@ -268,7 +355,7 @@ export default function LibraryScreen() {
     void (async () => {
       try {
         await updateMtgCardQty(card.id, next);
-        if (tab) await load(query, tab, 'collection');
+        if (tab) await load('', tab, 'collection');
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Could not update quantity.';
         Alert.alert('Error', message);
@@ -340,7 +427,8 @@ export default function LibraryScreen() {
           ? (['scryfall', 'archidekt'] as const)
           : (['scryfall'] as const);
 
-  const placeholder = searchPlaceholder(tab, mtgMode);
+  const placeholder = searchPlaceholder(tab, mtgMode, collectionScreen);
+  const onCollectionOverview = tab === 'mtg' && mtgMode === 'collection' && collectionScreen === 'overview';
   const browsingEmpty = query.trim().length === 0 && (tab === 'mtg' || availability === 'all');
   const emptyAction =
     writer && browsingEmpty && actions[0]
@@ -354,7 +442,7 @@ export default function LibraryScreen() {
   }
   const activeSort = tab === 'mtg' && mtgMode === 'decks' ? deckSort : tab === 'mtg' ? mtgSort : catalogSort;
   const sortOptions = tab === 'mtg' && mtgMode === 'decks' ? DECK_SORTS : tab === 'mtg' ? MTG_COLLECTION_SORTS : CATALOG_SORTS;
-  if (activeSort !== 'title') {
+  if (!onCollectionOverview && activeSort !== 'title') {
     filterBits.push(sortOptions.find((option) => option.id === activeSort)?.label ?? activeSort);
   }
 
@@ -370,6 +458,13 @@ export default function LibraryScreen() {
             accessibilityLabel={placeholder}
             placeholder={placeholder}
             onChangeText={(text) => setQueries((prev) => ({ ...prev, [scope]: text }))}
+            onSubmitEditing={() => {
+              if (onCollectionOverview && query.trim()) {
+                setActiveSetCode(null);
+                setCollectionScreen('all');
+                setSearchOpen(false);
+              }
+            }}
             onBlur={() => setSearchOpen(false)}
           />
         </View>
@@ -534,15 +629,30 @@ export default function LibraryScreen() {
             />
           )
         ) : mtgMode === 'collection' ? (
-          sortedCards.length === 0 ? (
+          mtgCards.length === 0 ? (
             <EmptyState
-              title={query ? 'No matches' : 'No cards yet'}
+              title="No cards yet"
               message={
                 writer
                   ? 'Add a card from Scryfall.'
                   : 'Cards added by your household will show up here.'
               }
               action={emptyAction}
+            />
+          ) : collectionScreen === 'overview' ? (
+            <MtgCollectionOverview
+              bars={typeBars}
+              copies={copyTotal}
+              sets={visibleSets}
+              onOpenSet={openSet}
+              onOpenAll={openAllCards}
+              bottomPad={listPad.paddingBottom}
+              filtering={query.trim().length > 0}
+            />
+          ) : sortedCards.length === 0 ? (
+            <EmptyState
+              title="No matches"
+              message="Try another name, or go back to the collection overview."
             />
           ) : (
             <FlatList
@@ -679,6 +789,8 @@ export default function LibraryScreen() {
               onChange={(mode) => {
                 setMtgMode(mode);
                 setSearchOpen(false);
+                setCollectionScreen('overview');
+                setActiveSetCode(null);
               }}
             />
           ) : lendingOn ? (
@@ -693,6 +805,7 @@ export default function LibraryScreen() {
               }}
             />
           ) : null}
+          {onCollectionOverview ? null : (
           <FilterChoices
             label="Sort"
             options={sortOptions}
@@ -711,6 +824,7 @@ export default function LibraryScreen() {
               }
             }}
           />
+          )}
         </LibraryDock>
       </View>
     </View>
@@ -719,6 +833,11 @@ export default function LibraryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  backButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingRight: spacing.md,
+  },
   results: { flex: 1 },
   searchTop: {
     paddingHorizontal: spacing.md,
