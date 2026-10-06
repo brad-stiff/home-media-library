@@ -25,6 +25,8 @@ export type SetCatalogEntry = {
   name: string;
   releasedAt: string | null;
   printedSize: number | null;
+  /** Every printing Scryfall files under the set, including showcase cards and tokens. */
+  cardCount: number | null;
   iconSvgUri: string | null;
 };
 
@@ -87,6 +89,14 @@ export function printedCollectorNumber(collectorNumber: string | null): number |
   return Number.isFinite(value) ? value : null;
 }
 
+/** Printed size when Scryfall has one. Otherwise the full card count. */
+export function checklistSize(entry: Pick<SetCatalogEntry, 'printedSize' | 'cardCount'> | undefined): number | null {
+  if (!entry) return null;
+  if (entry.printedSize != null && entry.printedSize > 0) return entry.printedSize;
+  if (entry.cardCount != null && entry.cardCount > 0) return entry.cardCount;
+  return null;
+}
+
 export function inPrintedSet(collectorNumber: string | null, printedSize: number | null): boolean {
   if (printedSize == null || printedSize <= 0) return false;
   const number = printedCollectorNumber(collectorNumber);
@@ -137,7 +147,7 @@ export function summarizeSets(
     group.owned.add(printingKey(card));
     const entry = code ? catalog.get(code) : undefined;
     const identity = collectorIdentity(card.collectorNumber);
-    if (identity && inPrintedSet(card.collectorNumber, entry?.printedSize ?? null)) {
+    if (identity && inPrintedSet(card.collectorNumber, checklistSize(entry))) {
       group.completed.add(identity);
     }
     groups.set(key, group);
@@ -147,8 +157,8 @@ export function summarizeSets(
   for (const [key, group] of groups) {
     const code = key === UNKNOWN_SET ? '' : key;
     const entry = code ? catalog.get(code) : undefined;
-    const printedSize = entry?.printedSize ?? null;
-    const hasSize = printedSize != null && printedSize > 0;
+    const printedSize = checklistSize(entry);
+    const hasSize = printedSize != null;
     const completed = hasSize ? group.completed.size : null;
     const percent = hasSize && completed != null ? Math.round((completed / printedSize) * 100) : null;
     summaries.push({

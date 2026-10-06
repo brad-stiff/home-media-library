@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { listScryfallSets } from './scryfall';
 import { SetCatalogEntry } from './mtgOverview';
 
-const CACHE_KEY = 'mtg-set-catalog-v1';
+const CACHE_KEY = 'mtg-set-catalog-v2';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 type CachePayload = {
@@ -31,7 +31,12 @@ export async function loadMtgSetCatalog(ownedCodes: readonly string[]): Promise<
   const needed = new Set(ownedCodes.map((code) => code.trim().toLowerCase()).filter(Boolean));
   const cached = await readCache();
   const fresh = cached != null && Date.now() - cached.fetchedAt < MAX_AGE_MS;
-  const coversOwned = cached != null && [...needed].every((code) => cached.sets.some((set) => set.code === code));
+  const coversOwned =
+    cached != null &&
+    [...needed].every((code) => {
+      const row = cached.sets.find((set) => set.code === code);
+      return row != null && row.entry != null && 'cardCount' in row.entry;
+    });
   if (cached && fresh && coversOwned) return toMap(cached.sets);
 
   try {
@@ -42,6 +47,7 @@ export async function loadMtgSetCatalog(ownedCodes: readonly string[]): Promise<
         name: set.name,
         releasedAt: set.released_at ?? null,
         printedSize: set.printed_size ?? null,
+        cardCount: set.card_count ?? null,
         iconSvgUri: set.icon_svg_uri ?? null,
       } satisfies SetCatalogEntry,
     }));

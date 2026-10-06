@@ -112,6 +112,7 @@ export type ScryfallSet = {
   icon_svg_uri?: string;
   released_at?: string | null;
   printed_size?: number | null;
+  card_count?: number | null;
   set_type?: string;
 };
 

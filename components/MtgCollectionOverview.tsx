@@ -26,6 +26,16 @@ function completionLabel(set: SetSummary): string {
   return `${set.owned} owned`;
 }
 
+/** Width for the tile bar. A started set keeps a sliver when rounding would draw nothing. */
+function completionBarPercent(set: SetSummary): number | null {
+  if (set.completed == null || set.printedSize == null || set.printedSize <= 0 || set.percent == null) {
+    return null;
+  }
+  const ratio = Math.min(100, (set.completed / set.printedSize) * 100);
+  if (set.completed > 0 && ratio < 2) return 2;
+  return ratio;
+}
+
 export function MtgCollectionOverview({
   bars,
   copies,
@@ -96,6 +106,7 @@ export function MtgCollectionOverview({
       }
       renderItem={({ item }) => {
         const label = completionLabel(item);
+        const barPercent = completionBarPercent(item);
         return (
           <Pressable
             onPress={() => onOpenSet(item.code)}
@@ -123,6 +134,11 @@ export function MtgCollectionOverview({
               <Text style={[typeScale.caption, { color: colors.textSecondary }]} numberOfLines={1}>
                 {label}
               </Text>
+              {barPercent != null ? (
+                <View style={[styles.setTrack, { backgroundColor: colors.surfaceElevated }]}>
+                  <View style={[styles.setFill, { width: `${barPercent}%`, backgroundColor: colors.accent }]} />
+                </View>
+              ) : null}
             </View>
             <ChevronIcon color={colors.textTertiary} />
           </Pressable>
@@ -197,5 +213,15 @@ const styles = StyleSheet.create({
   tileMeta: {
     flex: 1,
     gap: 2,
+  },
+  setTrack: {
+    height: 6,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+    marginTop: 2,
+  },
+  setFill: {
+    height: 6,
+    borderRadius: radius.sm,
   },
 });

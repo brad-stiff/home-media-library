@@ -7,6 +7,7 @@ import {
   collectionCopyTotal,
   collectionTypeBars,
   filterSetSummaries,
+  checklistSize,
   inPrintedSet,
   summarizeSets,
   type OverviewCard,
@@ -66,9 +67,10 @@ describe('collectionTypeBars', () => {
 
 describe('printed set completion', () => {
   const catalog = new Map<string, SetCatalogEntry>([
-    ['eoe', { name: 'Edge of Eternities', releasedAt: '2025-08-01', printedSize: 286, iconSvgUri: 'https://example/eoe.svg' }],
-    ['stx', { name: 'Strixhaven', releasedAt: '2021-04-23', printedSize: 275, iconSvgUri: null }],
-    ['sld', { name: 'Secret Lair', releasedAt: '2019-12-01', printedSize: null, iconSvgUri: null }],
+    ['eoe', { name: 'Edge of Eternities', releasedAt: '2025-08-01', printedSize: 286, cardCount: 400, iconSvgUri: 'https://example/eoe.svg' }],
+    ['stx', { name: 'Strixhaven', releasedAt: '2021-04-23', printedSize: 275, cardCount: 380, iconSvgUri: null }],
+    ['fin', { name: 'Final Fantasy', releasedAt: '2025-06-13', printedSize: null, cardCount: 594, iconSvgUri: null }],
+    ['sld', { name: 'Secret Lair', releasedAt: '2019-12-01', printedSize: null, cardCount: null, iconSvgUri: null }],
   ]);
 
   it('counts a suffix inside the printed size and leaves bonus sheets out', () => {
@@ -90,17 +92,24 @@ describe('printed set completion', () => {
         card({ scryfallId: 'e', setCode: 'stx', setName: 'Strixhaven', collectorNumber: '1' }),
         card({ scryfallId: 'f', setCode: 'sld', setName: 'Secret Lair Drop', collectorNumber: '1' }),
         card({ scryfallId: 'g', setCode: 'sld', setName: 'Secret Lair Drop', collectorNumber: '1' }),
+        card({ scryfallId: 'h', setCode: 'fin', setName: 'Final Fantasy', collectorNumber: '12' }),
+        card({ scryfallId: 'i', setCode: 'fin', setName: 'Final Fantasy', collectorNumber: '400' }),
       ],
       catalog,
     );
 
+    expect(checklistSize(catalog.get('eoe'))).toBe(286);
+    expect(checklistSize(catalog.get('fin'))).toBe(594);
+    expect(checklistSize(catalog.get('sld'))).toBeNull();
     const eoe = sets.find((set) => set.code === 'eoe');
     expect(eoe).toMatchObject({ completed: 2, printedSize: 286, percent: 1, owned: 3 });
     const stx = sets.find((set) => set.code === 'stx');
     expect(stx).toMatchObject({ completed: 1, printedSize: 275, owned: 2 });
+    const fin = sets.find((set) => set.code === 'fin');
+    expect(fin).toMatchObject({ completed: 2, printedSize: 594, percent: 0, owned: 2 });
     const sld = sets.find((set) => set.code === 'sld');
     expect(sld).toMatchObject({ completed: null, printedSize: null, percent: null, owned: 1 });
-    expect(sets.map((set) => set.code)).toEqual(['eoe', 'stx', 'sld']);
+    expect(sets.map((set) => set.code)).toEqual(['eoe', 'fin', 'stx', 'sld']);
   });
 
   it('filters tiles by set name and set code', () => {
