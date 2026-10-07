@@ -37,9 +37,10 @@ import {
   withTabPrefs,
 } from '../../lib/libraryView';
 import { searchMoviesInLibrary } from '../../lib/movies';
-import { attachColorIdentities, MtgCard, searchMtgCollection } from '../../lib/mtgCards';
-import { cardInSet, cardMatchesQuery, collectionCopyTotal, collectionTypeBars, filterSetSummaries, SetCatalogEntry, sortByCollectorNumber, summarizeSets } from '../../lib/mtgOverview';
-import { loadMtgSetCatalog } from '../../lib/mtgSets';
+import { addMtgCardFromScryfall, attachColorIdentities, MtgCard, searchMtgCollection } from '../../lib/mtgCards';
+import { cardInSet, cardMatchesQuery, checklistSize, collectionCopyTotal, collectionTypeBars, filterSetSummaries, groupOwnedPrintings, mergePrintedChecklist, PrintedSlot, SetCatalogEntry, sortByCollectorNumber, summarizeSets } from '../../lib/mtgOverview';
+import { loadMtgSetCatalog, loadPrintedChecklist } from '../../lib/mtgSets';
+import { getScryfallCard } from '../../lib/scryfall';
 import { listMtgDecks, MtgDeck } from '../../lib/mtgDecks';
 import { takeLibraryTab } from '../../lib/pendingLibraryTab';
 import { isTypeVisible, useProfile } from '../../lib/profile';
@@ -95,6 +96,8 @@ export default function LibraryScreen() {
   const [collectionScreen, setCollectionScreen] = useState<CollectionScreen>('overview');
   const [activeSetCode, setActiveSetCode] = useState<string | null>(null);
   const [setCatalog, setSetCatalog] = useState<Map<string, SetCatalogEntry>>(new Map());
+  const [printedSlots, setPrintedSlots] = useState<PrintedSlot[] | null>(null);
+  const [addingFinish, setAddingFinish] = useState<{ scryfallId: string; foil: boolean } | null>(null);
   const [queries, setQueries] = useState<Record<string, string>>({});
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [movies, setMovies] = useState<Movie[]>([]);
@@ -107,6 +110,7 @@ export default function LibraryScreen() {
   const [dockHeight, setDockHeight] = useState(64);
   const loadedScopes = useRef(new Set<string>());
   const loadRequest = useRef(0);
+  const addingFinishRef = useRef<string | null>(null);
   useToastLift('library', dockHeight + 72);
 
   const visible = useMemo(() => {
@@ -248,6 +252,48 @@ export default function LibraryScreen() {
     };
   }, [tab, mtgMode, mtgCards]);
 
+  const activePrintedSize =
+    collectionScreen === 'set' && activeSetCode ? checklistSize(setCatalog.get(activeSetCode)) : null;
+
+  useEffect(() => {
+    if (collectionScreen !== 'set' || !activeSetCode || activePrintedSize == null) {
+      setPrintedSlots(null);
+      return;
+    }
+    let cancelled = false;
+    const code = activeSetCode;
+    const size = activePrintedSize;
+    setPrintedSlots(null);
+    void loadPrintedChecklist(code, size)
+      .then((slots) => {
+        if (!cancelled) setPrintedSlots(slots);
+      })
+      .catch(() => {
+        if (!cancelled) setPrintedSlots(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [collectionScreen, activeSetCode, activePrintedSize]);
+
+  const addFinish = useCallback(async (scryfallId: string, foil: boolean) => {
+    const key = `${scryfallId}:${foil ? 'foil' : 'nonfoil'}`;
+    if (addingFinishRef.current) return;
+    addingFinishRef.current = key;
+    setAddingFinish({ scryfallId, foil });
+    try {
+      const scry = await getScryfallCard(scryfallId);
+      const saved = await addMtgCardFromScryfall(scry, { foil });
+      setMtgCards((prev) => [...prev.filter((card) => card.id !== saved.id), saved]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not add this card.';
+      Alert.alert('Could not add card', message);
+    } finally {
+      addingFinishRef.current = null;
+      setAddingFinish(null);
+    }
+  }, []);
+
   const typeBars = useMemo(() => collectionTypeBars(mtgCards), [mtgCards]);
   const copyTotal = useMemo(() => collectionCopyTotal(mtgCards), [mtgCards]);
   const setSummaries = useMemo(() => summarizeSets(mtgCards, setCatalog), [mtgCards, setCatalog]);
@@ -340,23 +386,31 @@ export default function LibraryScreen() {
     });
   }, [books, checkouts, bookAvailability, profile.libraryView.books.sort]);
 
-  const sortedCards = useMemo(() => {
+  const checklistEntries = useMemo(() => {
     const matched = mtgCards.filter((card) => {
       if (collectionScreen === 'set' && activeSetCode && !cardInSet(card, activeSetCode)) return false;
       if (collectionScreen === 'overview') return false;
       return cardMatchesQuery(card, query);
     });
-    if (collectionScreen === 'set') return sortByCollectorNumber(matched);
-    return sortMtgCollection(matched, profile.libraryView.mtg.sort, {
-      title: (card) => card.name,
+    if (collectionScreen === 'set') {
+      const owned = sortByCollectorNumber(matched);
+      const slots = query.trim() ? null : printedSlots;
+      return mergePrintedChecklist(owned, slots, activePrintedSize);
+    }
+    return sortMtgCollection(groupOwnedPrintings(matched), profile.libraryView.mtg.sort, {
+      title: (entry) => entry.nonfoil?.name ?? entry.foil?.name ?? '',
       year: () => null,
-      addedAt: (card) => card.addedAt,
-      setName: (card) => card.setName ?? card.setCode,
-      collectorNumber: (card) => card.collectorNumber,
-      colorIdentity: (card) => card.colorIdentity,
-      qty: (card) => card.qty,
+      addedAt: (entry) => {
+        const nonfoil = entry.nonfoil?.addedAt ?? '';
+        const foil = entry.foil?.addedAt ?? '';
+        return nonfoil > foil ? nonfoil : foil;
+      },
+      setName: (entry) => entry.nonfoil?.setName ?? entry.foil?.setName ?? entry.nonfoil?.setCode ?? entry.foil?.setCode ?? null,
+      collectorNumber: (entry) => entry.nonfoil?.collectorNumber ?? entry.foil?.collectorNumber ?? null,
+      colorIdentity: (entry) => entry.nonfoil?.colorIdentity ?? entry.foil?.colorIdentity ?? null,
+      qty: (entry) => (entry.nonfoil?.qty ?? 0) + (entry.foil?.qty ?? 0),
     });
-  }, [mtgCards, profile.libraryView.mtg.sort, collectionScreen, activeSetCode, query]);
+  }, [mtgCards, profile.libraryView.mtg.sort, collectionScreen, activeSetCode, query, printedSlots, activePrintedSize]);
 
   const sortedDecks = useMemo(
     () =>
@@ -604,7 +658,9 @@ export default function LibraryScreen() {
         ) : mtgMode === 'collection' ? (
           <MtgCollectionResults
             cards={mtgCards}
-            sortedCards={sortedCards}
+            entries={checklistEntries}
+            onAddFinish={writer ? (scryfallId, foil) => void addFinish(scryfallId, foil) : undefined}
+            addingFinish={addingFinish}
             screen={collectionScreen}
             writer={writer}
             layout={layout}

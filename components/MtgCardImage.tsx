@@ -16,6 +16,8 @@ interface MtgCardImageProps {
   uri: string | null;
   title?: string;
   foil?: boolean;
+  /** Fades the art for a printed card the collection does not own. */
+  muted?: boolean;
   style: StyleProp<ViewStyle>;
   placeholderColor: string;
   placeholderTextColor?: string;
@@ -25,6 +27,7 @@ export function MtgCardImage({
   uri,
   title,
   foil = false,
+  muted = false,
   style,
   placeholderColor,
   placeholderTextColor,
@@ -32,9 +35,16 @@ export function MtgCardImage({
   return (
     <View style={[style, styles.frame]}>
       {uri ? (
-        <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        <Image source={{ uri }} style={[StyleSheet.absoluteFill, muted && styles.muted]} contentFit="cover" />
       ) : (
-        <View style={[StyleSheet.absoluteFill, styles.placeholder, { backgroundColor: placeholderColor }]}>
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            styles.placeholder,
+            { backgroundColor: placeholderColor },
+            muted && styles.muted,
+          ]}
+        >
           {title ? (
             <Text style={[styles.placeholderText, { color: placeholderTextColor }]} numberOfLines={3}>
               {title}
@@ -42,7 +52,7 @@ export function MtgCardImage({
           ) : null}
         </View>
       )}
-      {foil ? (
+      {foil && !muted ? (
         <LinearGradient colors={FOIL_COLORS} start={FOIL_START} end={FOIL_END} style={styles.foil} />
       ) : null}
     </View>
@@ -52,6 +62,9 @@ export function MtgCardImage({
 const styles = StyleSheet.create({
   frame: {
     overflow: 'hidden',
+  },
+  muted: {
+    opacity: 0.4,
   },
   placeholder: {
     alignItems: 'center',

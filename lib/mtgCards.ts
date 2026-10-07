@@ -70,6 +70,24 @@ export async function getMtgCard(id: string): Promise<MtgCard | null> {
   return data ? rowToCard(data) : null;
 }
 
+/** Both finishes of the printing this row belongs to. Either side is null when unowned. */
+export async function getMtgPrinting(id: string): Promise<{ nonfoil: MtgCard | null; foil: MtgCard | null } | null> {
+  const card = await getMtgCard(id);
+  if (!card) return null;
+
+  const { data, error } = await supabase
+    .from('mtg_cards')
+    .select('*')
+    .eq('household_id', card.householdId)
+    .eq('scryfall_id', card.scryfallId);
+  if (error) throw error;
+
+  const rows = (data ?? []).map(rowToCard);
+  const nonfoil = rows.find((row) => !row.foil) ?? (card.foil ? null : card);
+  const foil = rows.find((row) => row.foil) ?? (card.foil ? card : null);
+  return { nonfoil, foil };
+}
+
 export async function searchMtgCollection(query: string): Promise<MtgCard[]> {
   const cards = await getAllMtgCards();
   return cards.filter((c) => cardMatchesQuery(c, query));

@@ -89,6 +89,48 @@ export function scryfallStandardLegality(card: ScryfallCard): string | null {
   return card.legalities?.standard ?? null;
 }
 
+type ScryfallList = {
+  data?: ScryfallCard[];
+  has_more?: boolean;
+  next_page?: string | null;
+};
+
+/** Scryfall sends an absolute next page. Only follow our own host. */
+function scryfallNextPath(nextPage: string | null | undefined): string | null {
+  if (!nextPage?.startsWith(`${SCRYFALL}/`)) return null;
+  return nextPage.slice(SCRYFALL.length);
+}
+
+/**
+ * Printings in a set whose collector number is at most `printedSize`.
+ * Pages are followed with a short pause so a large set stays under Scryfall's rate limit.
+ */
+export async function listScryfallSetPrintings(setCode: string, printedSize: number): Promise<ScryfallCard[]> {
+  const code = setCode.trim().toLowerCase();
+  if (!/^[a-z0-9]+$/.test(code) || !Number.isFinite(printedSize) || printedSize <= 0) return [];
+
+  const query = `set:${code} cn<=${Math.floor(printedSize)}`;
+  let path: string | null = `/cards/search?q=${encodeURIComponent(query)}&unique=prints&order=set`;
+  const cards: ScryfallCard[] = [];
+
+  for (let page = 0; path && page < 15; page += 1) {
+    if (page > 0) await sleep(100);
+    let data: ScryfallList;
+    try {
+      data = await scryfallFetch<ScryfallList>(path);
+    } catch (error) {
+      if (page === 0 && error && typeof error === 'object' && 'status' in error && (error as { status: number }).status === 404) {
+        return [];
+      }
+      throw error;
+    }
+    cards.push(...(data.data ?? []));
+    path = data.has_more ? scryfallNextPath(data.next_page) : null;
+  }
+
+  return cards;
+}
+
 export async function searchScryfallCards(query: string): Promise<ScryfallCard[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];

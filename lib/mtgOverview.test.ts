@@ -9,6 +9,8 @@ import {
   filterSetSummaries,
   checklistSize,
   inPrintedSet,
+  mergePrintedChecklist,
+  selectPrintedSlots,
   sortByCollectorNumber,
   summarizeSets,
   type OverviewCard,
@@ -177,5 +179,76 @@ describe('sortByCollectorNumber', () => {
       'Blank',
       'Missing',
     ]);
+  });
+});
+
+describe('mergePrintedChecklist', () => {
+  function owned(name: string, collectorNumber: string | null, foil = false, scryfallId?: string) {
+    return { name, collectorNumber, foil, scryfallId: scryfallId ?? `${name}:${foil ? 'foil' : 'nonfoil'}` };
+  }
+
+  function entryName(entry: ReturnType<typeof mergePrintedChecklist<ReturnType<typeof owned>>>[number]): string {
+    if (entry.kind === 'missing') return entry.slot.name;
+    if (entry.kind === 'printing') return entry.nonfoil?.name ?? entry.foil?.name ?? '';
+    return entry.card.name;
+  }
+
+  function slot(scryfallId: string, name: string, collectorNumber: string, imageUri: string | null = 'https://img') {
+    return { scryfallId, name, collectorNumber, imageUri, setCode: 'eoe' };
+  }
+
+  it('keeps one base printing and prefers the exact collector number', () => {
+    expect(
+      selectPrintedSlots(
+        [
+          slot('padded', 'Padded', '010', 'https://padded'),
+          slot('exact', 'Exact', '10', null),
+          slot('variant', 'Variant', '10a', 'https://variant'),
+          slot('bonus', 'Bonus', 'A-1'),
+        ],
+        12,
+      ).map((card) => card.scryfallId),
+    ).toEqual(['exact']);
+  });
+
+  it('fills owned numbers and leaves the rest as missing slots', () => {
+    const cards = [
+      owned('Bolt', '2', true, 'bolt'),
+      owned('Bolt', '2', false, 'bolt'),
+      owned('Variant', '3a'),
+      owned('Archive', 'A-1'),
+      owned('Beyond', '20'),
+    ];
+    const slots = [slot('s1', 'One', '1'), slot('s2', 'Bolt', '2'), slot('s3', 'Three', '3'), slot('s4', 'Four', '4')];
+    const entries = mergePrintedChecklist(cards, slots, 12);
+
+    expect(entries.map(entryName)).toEqual(['One', 'Bolt', 'Three', 'Variant', 'Four', 'Beyond', 'Archive']);
+    const bolt = entries[1];
+    expect(bolt?.kind).toBe('printing');
+    if (bolt?.kind === 'printing') {
+      expect(bolt.nonfoil?.foil).toBe(false);
+      expect(bolt.foil?.foil).toBe(true);
+    }
+  });
+
+  it('treats a foil-only copy as owning the printed slot', () => {
+    const entries = mergePrintedChecklist([owned('Bolt', '2', true, 'bolt')], [slot('s2', 'Bolt', '2')], 12);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.kind).toBe('printing');
+    if (entries[0]?.kind === 'printing') {
+      expect(entries[0].nonfoil).toBeNull();
+      expect(entries[0].foil?.foil).toBe(true);
+    }
+  });
+
+  it('leaves owned printings in place until the checklist arrives', () => {
+    const cards = [owned('Bolt', '2'), owned('One', '1')];
+    expect(mergePrintedChecklist(cards, null, 12).map(entryName)).toEqual(['Bolt', 'One']);
+  });
+
+  it('treats a padded collector number as owning that slot', () => {
+    const entries = mergePrintedChecklist([owned('Ten', '010')], [slot('s10', 'Other', '10')], 12);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.kind).toBe('printing');
   });
 });

@@ -248,6 +248,142 @@ function compareCollectorRank(a: CollectorRank, b: CollectorRank): number {
   return a.suffix.localeCompare(b.suffix);
 }
 
+/** One base printing from the printed checklist, such as 10 but not 10a. */
+export type PrintedSlot = {
+  scryfallId: string;
+  name: string;
+  collectorNumber: string;
+  imageUri: string | null;
+  setCode: string;
+};
+
+export type PrintingEntry<T> = { kind: 'printing'; nonfoil: T | null; foil: T | null };
+
+export type ChecklistEntry<T> =
+  | { kind: 'owned'; card: T }
+  | PrintingEntry<T>
+  | { kind: 'missing'; slot: PrintedSlot };
+
+/**
+ * Printed-set slot for a base collector number. A suffix such as 10a, a bonus
+ * sheet such as A-1, or a number past the printed size does not fill a slot.
+ */
+export function printedSlotNumber(collectorNumber: string | null, printedSize: number | null): number | null {
+  if (printedSize == null || printedSize <= 0) return null;
+  const rank = collectorRank(collectorNumber);
+  if (rank.band !== 0 || rank.suffix !== '') return null;
+  if (rank.number < 1 || rank.number > printedSize) return null;
+  return rank.number;
+}
+
+function slotScore(collectorNumber: string, number: number, imageUri: string | null): number {
+  const exact = collectorNumber.trim() === String(number) ? 2 : 0;
+  return exact + (imageUri ? 1 : 0);
+}
+
+/** One Scryfall printing per printed number, preferring 10 over 010. */
+export function selectPrintedSlots(
+  cards: readonly {
+    scryfallId: string;
+    name: string;
+    collectorNumber: string | null;
+    imageUri: string | null;
+    setCode: string;
+  }[],
+  printedSize: number,
+): PrintedSlot[] {
+  const chosen = new Map<number, PrintedSlot>();
+  for (const card of cards) {
+    const number = printedSlotNumber(card.collectorNumber, printedSize);
+    if (number == null || !card.collectorNumber) continue;
+    const slot: PrintedSlot = {
+      scryfallId: card.scryfallId,
+      name: card.name,
+      collectorNumber: card.collectorNumber,
+      imageUri: card.imageUri,
+      setCode: card.setCode,
+    };
+    const current = chosen.get(number);
+    if (
+      !current ||
+      slotScore(slot.collectorNumber, number, slot.imageUri) >
+        slotScore(current.collectorNumber, number, current.imageUri)
+    ) {
+      chosen.set(number, slot);
+    }
+  }
+  return [...chosen.values()];
+}
+
+type FinishCard = {
+  scryfallId: string;
+  name: string;
+  collectorNumber: string | null;
+  foil: boolean;
+};
+
+/** Foil and non-foil of one Scryfall printing, in the order those rows first appeared. */
+export function groupOwnedPrintings<T extends FinishCard>(owned: readonly T[]): PrintingEntry<T>[] {
+  const order: string[] = [];
+  const groups = new Map<string, { nonfoil: T | null; foil: T | null }>();
+  for (const card of owned) {
+    const group = groups.get(card.scryfallId) ?? { nonfoil: null, foil: null };
+    if (!groups.has(card.scryfallId)) order.push(card.scryfallId);
+    if (card.foil) group.foil = card;
+    else group.nonfoil = card;
+    groups.set(card.scryfallId, group);
+  }
+  return order.map((id) => {
+    const group = groups.get(id);
+    return { kind: 'printing' as const, nonfoil: group?.nonfoil ?? null, foil: group?.foil ?? null };
+  });
+}
+
+/**
+ * One slot per printing. Foil and non-foil share it. Missing printed numbers are added when
+ * `slots` is present. Null `slots` keeps the owned printings only, so a set can render first.
+ */
+export function mergePrintedChecklist<T extends FinishCard>(
+  owned: readonly T[],
+  slots: readonly PrintedSlot[] | null,
+  printedSize: number | null,
+): ChecklistEntry<T>[] {
+  const printings = groupOwnedPrintings(owned);
+  if (!slots || printedSize == null || printedSize <= 0) return printings;
+
+  const ownedNumbers = new Set<number>();
+  for (const card of owned) {
+    const number = printedSlotNumber(card.collectorNumber, printedSize);
+    if (number != null) ownedNumbers.add(number);
+  }
+
+  const missing = selectPrintedSlots(slots, printedSize).flatMap((slot) => {
+    const number = printedSlotNumber(slot.collectorNumber, printedSize);
+    if (number == null || ownedNumbers.has(number)) return [];
+    return [{ kind: 'missing' as const, slot }];
+  });
+
+  const sortable = [
+    ...printings.map((entry) => {
+      const card = entry.nonfoil ?? entry.foil;
+      return {
+        name: card?.name ?? '',
+        collectorNumber: card?.collectorNumber ?? null,
+        foil: false,
+        entry,
+      };
+    }),
+    ...missing.map((entry) => ({
+      name: entry.slot.name,
+      collectorNumber: entry.slot.collectorNumber,
+      foil: false,
+      entry,
+    })),
+  ];
+
+  return sortByCollectorNumber(sortable).map((item) => item.entry);
+}
+
 /** Set-screen order: collector number, then non-foil before foil, then name. */
 export function sortByCollectorNumber<T extends { name: string; collectorNumber: string | null; foil: boolean }>(
   cards: readonly T[],
