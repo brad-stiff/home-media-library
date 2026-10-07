@@ -1,10 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { PrintedSlot, selectPrintedSlots, SetCatalogEntry } from './mtgOverview';
-import { listScryfallSetPrintings, listScryfallSets, scryfallDisplayName, scryfallImageUri } from './scryfall';
+import { listScryfallSetPrintings, listScryfallSets, scryfallBackImageUri, scryfallDisplayName, scryfallImageUri } from './scryfall';
 
 const CACHE_KEY = 'mtg-set-catalog-v2';
-const CHECKLIST_CACHE_KEY = 'mtg-printed-checklists-v1';
+const CHECKLIST_CACHE_KEY = 'mtg-printed-checklists-v2';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_CACHED_CHECKLISTS = 12;
 
@@ -102,6 +102,7 @@ export async function loadPrintedChecklist(setCode: string, printedSize: number)
       name: scryfallDisplayName(card),
       collectorNumber: card.collector_number ?? null,
       imageUri: scryfallImageUri(card, 'small'),
+      backImageUri: scryfallBackImageUri(card, 'small'),
       setCode: code,
     })),
     printedSize,

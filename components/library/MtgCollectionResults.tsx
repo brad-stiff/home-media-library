@@ -126,6 +126,7 @@ function ChecklistRow({
   const scryfallId = missing ? entry.slot.scryfallId : nonfoil?.scryfallId ?? foilCard?.scryfallId ?? single?.scryfallId ?? '';
   const name = missing ? entry.slot.name : nonfoil?.name ?? foilCard?.name ?? single?.name ?? '';
   const imageUri = missing ? entry.slot.imageUri : nonfoil?.imageUri ?? foilCard?.imageUri ?? single?.imageUri ?? null;
+  const backUri = missing ? entry.slot.backImageUri : nonfoil?.backImageUri ?? foilCard?.backImageUri ?? single?.backImageUri ?? null;
   const setCode = missing ? entry.slot.setCode : nonfoil?.setCode ?? foilCard?.setCode ?? single?.setCode;
   const collectorNumber = missing
     ? entry.slot.collectorNumber
@@ -161,10 +162,13 @@ function ChecklistRow({
   const art = (
     <MtgCardImage
       uri={imageUri}
+      backUri={backUri}
       title={name}
       foil={foilArt}
       muted={muted}
       style={layout === 'grid' ? styles.bookCover : styles.mtgThumb}
+      onPress={onImage}
+      accessibilityLabel={onImage ? imageLabel : undefined}
       placeholderColor={colors.surfaceElevated}
       placeholderTextColor={colors.textTertiary}
     />
@@ -224,55 +228,38 @@ function ChecklistRow({
         ];
 
   if (single) {
+    const details = (
+      <>
+        <Text style={layout === 'grid' ? [styles.bookTitle, { color: nameColor }] : [typeScale.body, { color: nameColor, fontWeight: '600' }]} numberOfLines={2}>
+          {name}
+          {single.foil ? ' ★' : ''}
+        </Text>
+        {layout === 'list' && metaLine ? (
+          <Text style={[typeScale.caption, { color: captionColor }]} numberOfLines={1}>
+            {metaLine}
+          </Text>
+        ) : null}
+        {finishes}
+      </>
+    );
     return (
-      <Pressable
-        onPress={() => onOpen(single.id)}
-        accessibilityRole="button"
-        accessibilityLabel={imageLabel}
-        style={({ pressed }) => [rowStyle, pressed && { opacity: 0.85 }]}
-      >
-        {layout === 'grid' ? (
-          <>
-            {artFrame}
-            <Text style={[styles.bookTitle, { color: nameColor }]} numberOfLines={2}>
-              {name}
-              {single.foil ? ' ★' : ''}
-            </Text>
-            {finishes}
-          </>
-        ) : (
-          <>
-            {artFrame}
-            <View style={styles.listMeta}>
-              <Text style={[typeScale.body, { color: nameColor, fontWeight: '600' }]} numberOfLines={2}>
-                {name}
-                {single.foil ? ' ★' : ''}
-              </Text>
-              {metaLine ? (
-                <Text style={[typeScale.caption, { color: captionColor }]} numberOfLines={1}>
-                  {metaLine}
-                </Text>
-              ) : null}
-              {finishes}
-            </View>
-            <ChevronIcon color={colors.textTertiary} />
-          </>
-        )}
-      </Pressable>
+      <View style={rowStyle}>
+        {artFrame}
+        <Pressable
+          onPress={() => onOpen(single.id)}
+          accessibilityRole="button"
+          accessibilityLabel={imageLabel}
+          style={({ pressed }) => [layout === 'list' ? styles.singleBody : undefined, pressed && { opacity: 0.85 }]}
+        >
+          {layout === 'list' ? <View style={styles.listMeta}>{details}</View> : details}
+          {layout === 'list' ? <ChevronIcon color={colors.textTertiary} /> : null}
+        </Pressable>
+      </View>
     );
   }
 
-  const image = onImage ? (
-    <Pressable
-      onPress={onImage}
-      accessibilityRole="button"
-      accessibilityLabel={imageLabel}
-      style={layout === 'grid' ? styles.artFrame : undefined}
-    >
-      {artFrame}
-    </Pressable>
-  ) : (
-    <View accessibilityLabel={imageLabel} style={layout === 'grid' ? styles.artFrame : undefined}>
+  const image = (
+    <View accessibilityLabel={onImage ? undefined : imageLabel} style={layout === 'grid' ? styles.artFrame : undefined}>
       {artFrame}
     </View>
   );
@@ -435,6 +422,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   listMeta: { flex: 1, gap: 2 },
+  singleBody: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
   counts: {
     flexDirection: 'row',
     flexWrap: 'wrap',

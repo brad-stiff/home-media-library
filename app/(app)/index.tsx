@@ -37,7 +37,7 @@ import {
   withTabPrefs,
 } from '../../lib/libraryView';
 import { searchMoviesInLibrary } from '../../lib/movies';
-import { addMtgCardFromScryfall, attachColorIdentities, MtgCard, searchMtgCollection } from '../../lib/mtgCards';
+import { addMtgCardFromScryfall, attachCardBacks, attachColorIdentities, MtgCard, searchMtgCollection } from '../../lib/mtgCards';
 import { cardInSet, cardMatchesQuery, checklistSize, collectionCopyTotal, collectionTypeBars, filterSetSummaries, groupOwnedPrintings, mergePrintedChecklist, PrintedSlot, SetCatalogEntry, sortByCollectorNumber, summarizeSets } from '../../lib/mtgOverview';
 import { loadMtgSetCatalog, loadPrintedChecklist } from '../../lib/mtgSets';
 import { getScryfallCard } from '../../lib/scryfall';
@@ -194,7 +194,7 @@ export default function LibraryScreen() {
         const results = await searchMtgCollection(searchQuery);
         setMtgCards(results);
         try {
-          const filled = await attachColorIdentities(results);
+          const filled = await attachCardBacks(await attachColorIdentities(results));
           setMtgCards(filled);
         } catch {
           // Set, title, and quantity sorts still work if Scryfall is unreachable.

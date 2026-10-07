@@ -254,6 +254,7 @@ export type PrintedSlot = {
   name: string;
   collectorNumber: string;
   imageUri: string | null;
+  backImageUri: string | null;
   setCode: string;
 };
 
@@ -288,6 +289,7 @@ export function selectPrintedSlots(
     name: string;
     collectorNumber: string | null;
     imageUri: string | null;
+    backImageUri: string | null;
     setCode: string;
   }[],
   printedSize: number,
@@ -301,6 +303,7 @@ export function selectPrintedSlots(
       name: card.name,
       collectorNumber: card.collectorNumber,
       imageUri: card.imageUri,
+      backImageUri: card.backImageUri,
       setCode: card.setCode,
     };
     const current = chosen.get(number);

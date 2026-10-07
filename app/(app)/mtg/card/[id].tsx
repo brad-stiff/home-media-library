@@ -8,7 +8,7 @@ import { MtgCardImage } from '../../../../components/MtgCardImage';
 import { PrimaryButton } from '../../../../components/PrimaryButton';
 import { useAuth } from '../../../../lib/auth';
 import { useHousehold } from '../../../../lib/householdContext';
-import { addMtgCardFromScryfall, deleteMtgCard, getMtgPrinting, MtgCard, updateMtgCardQty } from '../../../../lib/mtgCards';
+import { addMtgCardFromScryfall, attachCardBacks, deleteMtgCard, getMtgPrinting, MtgCard, updateMtgCardQty } from '../../../../lib/mtgCards';
 import { canDeleteOwned, isWriter } from '../../../../lib/roles';
 import { getScryfallCard } from '../../../../lib/scryfall';
 import { spacing, useTheme } from '../../../../lib/theme';
@@ -26,7 +26,18 @@ export default function MtgCardDetailScreen() {
 
   const load = useCallback(async () => {
     if (!id || !household) return;
-    setPrinting(await getMtgPrinting(id));
+    const loaded = await getMtgPrinting(id);
+    if (!loaded) {
+      setPrinting(null);
+      return;
+    }
+    const rows = [loaded.nonfoil, loaded.foil].filter((row): row is MtgCard => row != null);
+    const filled = await attachCardBacks(rows);
+    const byId = new Map(filled.map((row) => [row.id, row]));
+    setPrinting({
+      nonfoil: loaded.nonfoil ? byId.get(loaded.nonfoil.id) ?? loaded.nonfoil : null,
+      foil: loaded.foil ? byId.get(loaded.foil.id) ?? loaded.foil : null,
+    });
   }, [household, id]);
 
   useFocusEffect(
@@ -154,6 +165,7 @@ export default function MtgCardDetailScreen() {
           art={
             <MtgCardImage
               uri={card.imageUri}
+              backUri={card.backImageUri}
               title={card.name}
               foil={foilOnly}
               style={styles.art}

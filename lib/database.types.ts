@@ -118,6 +118,8 @@ export type Database = {
           type_line: string | null;
           rarity: string | null;
           image_uri: string | null;
+          back_image_uri: string | null;
+          back_resolved: boolean;
           qty: number;
           foil: boolean;
           color_identity: string | null;
@@ -238,6 +240,7 @@ export type Database = {
         Returns: Database['public']['Tables']['checkouts']['Row'];
       };
       fill_mtg_color_identities: { Args: { p_cards: Json }; Returns: number };
+      fill_mtg_card_backs: { Args: { p_cards: Json }; Returns: number };
     };
   };
 };

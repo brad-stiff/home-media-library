@@ -67,6 +67,15 @@ export function scryfallImageUri(card: ScryfallCard, size: 'small' | 'normal' = 
   return face?.image_uris?.[size] ?? face?.image_uris?.normal ?? null;
 }
 
+/** Back face art for a transform or modal double-faced card. One combined picture has no back. */
+export function scryfallBackImageUri(card: ScryfallCard, size: 'small' | 'normal' = 'normal'): string | null {
+  const backFace = card.card_faces?.[1]?.image_uris;
+  const back = backFace?.[size] ?? backFace?.normal ?? backFace?.small ?? null;
+  if (!back) return null;
+  const front = scryfallImageUri(card, size);
+  return back === front ? null : back;
+}
+
 export function scryfallDisplayName(card: ScryfallCard): string {
   return card.name;
 }

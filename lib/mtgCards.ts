@@ -3,7 +3,7 @@ import { colorIdentityKey } from './deckLegality';
 import { cardMatchesQuery } from './mtgOverview';
 import { getMyHousehold } from './household';
 import { pageAll } from './pageAll';
-import { getScryfallCardsByIds, ScryfallCard, scryfallDisplayName, scryfallImageUri } from './scryfall';
+import { getScryfallCardsByIds, ScryfallCard, scryfallBackImageUri, scryfallDisplayName, scryfallImageUri } from './scryfall';
 import { supabase } from './supabase';
 
 export type MtgCard = {
@@ -19,6 +19,8 @@ export type MtgCard = {
   typeLine: string | null;
   rarity: string | null;
   imageUri: string | null;
+  backImageUri: string | null;
+  backResolved: boolean;
   qty: number;
   foil: boolean;
   colorIdentity: string | null;
@@ -43,6 +45,8 @@ function rowToCard(row: MtgCardRow): MtgCard {
     typeLine: row.type_line,
     rarity: row.rarity,
     imageUri: row.image_uri,
+    backImageUri: row.back_image_uri,
+    backResolved: row.back_resolved,
     qty: row.qty,
     foil: row.foil,
     colorIdentity: row.color_identity,
@@ -105,6 +109,7 @@ export async function addMtgCardFromScryfall(
   const qty = options?.qty && options.qty > 0 ? options.qty : 1;
   const foil = !!options?.foil;
   const colorIdentity = colorIdentityKey(card.color_identity);
+  const backImageUri = scryfallBackImageUri(card, 'normal');
 
   const { data: existing } = await supabase
     .from('mtg_cards')
@@ -149,6 +154,8 @@ export async function addMtgCardFromScryfall(
       type_line: card.type_line ?? null,
       rarity: card.rarity ?? null,
       image_uri: scryfallImageUri(card, 'normal'),
+      back_image_uri: backImageUri,
+      back_resolved: true,
       qty,
       foil,
       color_identity: colorIdentity,
@@ -219,6 +226,59 @@ export async function attachColorIdentities(cards: MtgCard[]): Promise<MtgCard[]
     await Promise.all(
       pending.map((card) =>
         supabase.from('mtg_cards').update({ color_identity: card.color_identity }).eq('id', card.id),
+      ),
+    );
+  }
+
+  return next;
+}
+
+const BACK_WRITE_CHUNK = 200;
+
+/**
+ * Stores the back face for transform and modal double-faced cards.
+ * A card with one picture is marked resolved so the collection is not fetched again.
+ */
+export async function attachCardBacks(cards: MtgCard[]): Promise<MtgCard[]> {
+  const unresolved = cards.filter((card) => !card.backResolved);
+  if (unresolved.length === 0) return cards;
+
+  let found: ScryfallCard[] = [];
+  try {
+    found = await getScryfallCardsByIds(unresolved.map((card) => card.scryfallId));
+  } catch {
+    return cards;
+  }
+
+  const backs = new Map(found.map((card) => [card.id, scryfallBackImageUri(card, 'normal')]));
+  const resolvedIds = new Set(found.map((card) => card.id));
+  const next = cards.map((card) => {
+    if (card.backResolved || !resolvedIds.has(card.scryfallId)) return card;
+    return { ...card, backResolved: true, backImageUri: backs.get(card.scryfallId) ?? null };
+  });
+
+  const pending = next.flatMap((card) => {
+    if (!card.backResolved) return [];
+    const previous = cards.find((row) => row.id === card.id);
+    if (!previous || previous.backResolved) return [];
+    return [{ id: card.id, back_image_uri: card.backImageUri }];
+  });
+
+  try {
+    for (let index = 0; index < pending.length; index += BACK_WRITE_CHUNK) {
+      const { error } = await supabase.rpc('fill_mtg_card_backs', {
+        p_cards: pending.slice(index, index + BACK_WRITE_CHUNK),
+      });
+      if (error) throw error;
+    }
+  } catch {
+    await Promise.all(
+      pending.map((card) =>
+        supabase
+          .from('mtg_cards')
+          .update({ back_image_uri: card.back_image_uri, back_resolved: true })
+          .eq('id', card.id)
+          .eq('back_resolved', false),
       ),
     );
   }

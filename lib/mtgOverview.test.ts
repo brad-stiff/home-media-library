@@ -194,7 +194,7 @@ describe('mergePrintedChecklist', () => {
   }
 
   function slot(scryfallId: string, name: string, collectorNumber: string, imageUri: string | null = 'https://img') {
-    return { scryfallId, name, collectorNumber, imageUri, setCode: 'eoe' };
+    return { scryfallId, name, collectorNumber, imageUri, backImageUri: null, setCode: 'eoe' };
   }
 
   it('keeps one base printing and prefers the exact collector number', () => {

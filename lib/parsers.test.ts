@@ -11,7 +11,7 @@ import {
 import { checkoutStatus } from './checkoutStatus';
 import { backdropUrl, extractYear, formatRuntime, posterUrl } from './mediaFormat';
 import { bookSearchSubtitle } from './openLibrary';
-import { scryfallImageUri } from './scryfall';
+import { scryfallBackImageUri, scryfallImageUri } from './scryfall';
 import { movieSearchSubtitle } from './tmdb';
 import { formatOwnershipLabel } from './types';
 
@@ -187,6 +187,28 @@ describe('Scryfall images', () => {
     ).toBe('https://cards.example/face.jpg');
 
     expect(scryfallImageUri({ id: '3', name: 'No art' })).toBeNull();
+  });
+
+  it('uses the second face only when that face has its own art', () => {
+    expect(
+      scryfallBackImageUri({
+        id: 'dfc',
+        name: 'Delver of Secrets // Insectile Aberration',
+        card_faces: [
+          { image_uris: { normal: 'https://cards.scryfall.io/normal/front/a.jpg', small: 'https://cards.scryfall.io/small/front/a.jpg' } },
+          { image_uris: { normal: 'https://cards.scryfall.io/normal/back/a.jpg', small: 'https://cards.scryfall.io/small/back/a.jpg' } },
+        ],
+      }),
+    ).toBe('https://cards.scryfall.io/normal/back/a.jpg');
+
+    expect(
+      scryfallBackImageUri({
+        id: 'split',
+        name: 'Fire // Ice',
+        image_uris: { normal: 'https://cards.scryfall.io/normal/combined.jpg' },
+        card_faces: [{ name: 'Fire' }, { name: 'Ice' }],
+      }),
+    ).toBeNull();
   });
 });
 
