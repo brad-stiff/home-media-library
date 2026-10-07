@@ -9,6 +9,7 @@ import {
   filterSetSummaries,
   checklistSize,
   inPrintedSet,
+  sortByCollectorNumber,
   summarizeSets,
   type OverviewCard,
   type SetCatalogEntry,
@@ -140,5 +141,41 @@ describe('card browse helpers', () => {
     expect(cardInSet(bolt, 'lea')).toBe(true);
     expect(cardInSet(bolt, 'eoe')).toBe(false);
     expect(cardInSet(card({ scryfallId: 'x', name: 'Nameless', setCode: '  ' }), '__unknown__')).toBe(true);
+  });
+});
+
+describe('sortByCollectorNumber', () => {
+  function printing(name: string, collectorNumber: string | null, foil = false) {
+    return { name, collectorNumber, foil };
+  }
+
+  it('orders a set like a checklist', () => {
+    const cards = [
+      printing('Missing', null),
+      printing('Archive ten', 'A-10'),
+      printing('Archive', 'A-1'),
+      printing('Ten B', '10b'),
+      printing('Ten', '10'),
+      printing('Ten A foil', '10a', true),
+      printing('Ten A', '10a'),
+      printing('Nine', '009'),
+      printing('Hundred', '100'),
+      printing('Bonus later', 'B-2'),
+      printing('Blank', '   '),
+    ];
+
+    expect(sortByCollectorNumber(cards).map((card) => card.name)).toEqual([
+      'Nine',
+      'Ten',
+      'Ten A',
+      'Ten A foil',
+      'Ten B',
+      'Hundred',
+      'Archive',
+      'Archive ten',
+      'Bonus later',
+      'Blank',
+      'Missing',
+    ]);
   });
 });

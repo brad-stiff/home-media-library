@@ -38,7 +38,7 @@ import {
 } from '../../lib/libraryView';
 import { searchMoviesInLibrary } from '../../lib/movies';
 import { attachColorIdentities, MtgCard, searchMtgCollection } from '../../lib/mtgCards';
-import { cardInSet, cardMatchesQuery, collectionCopyTotal, collectionTypeBars, filterSetSummaries, SetCatalogEntry, summarizeSets } from '../../lib/mtgOverview';
+import { cardInSet, cardMatchesQuery, collectionCopyTotal, collectionTypeBars, filterSetSummaries, SetCatalogEntry, sortByCollectorNumber, summarizeSets } from '../../lib/mtgOverview';
 import { loadMtgSetCatalog } from '../../lib/mtgSets';
 import { listMtgDecks, MtgDeck } from '../../lib/mtgDecks';
 import { takeLibraryTab } from '../../lib/pendingLibraryTab';
@@ -340,26 +340,23 @@ export default function LibraryScreen() {
     });
   }, [books, checkouts, bookAvailability, profile.libraryView.books.sort]);
 
-  const sortedCards = useMemo(
-    () =>
-      sortMtgCollection(
-        mtgCards.filter((card) => {
-          if (collectionScreen === 'set' && activeSetCode && !cardInSet(card, activeSetCode)) return false;
-          if (collectionScreen === 'overview') return false;
-          return cardMatchesQuery(card, query);
-        }),
-        profile.libraryView.mtg.sort,
-        {
-        title: (card) => card.name,
-        year: () => null,
-        addedAt: (card) => card.addedAt,
-        setName: (card) => card.setName ?? card.setCode,
-        collectorNumber: (card) => card.collectorNumber,
-        colorIdentity: (card) => card.colorIdentity,
-        qty: (card) => card.qty,
-      }),
-    [mtgCards, profile.libraryView.mtg.sort, collectionScreen, activeSetCode, query],
-  );
+  const sortedCards = useMemo(() => {
+    const matched = mtgCards.filter((card) => {
+      if (collectionScreen === 'set' && activeSetCode && !cardInSet(card, activeSetCode)) return false;
+      if (collectionScreen === 'overview') return false;
+      return cardMatchesQuery(card, query);
+    });
+    if (collectionScreen === 'set') return sortByCollectorNumber(matched);
+    return sortMtgCollection(matched, profile.libraryView.mtg.sort, {
+      title: (card) => card.name,
+      year: () => null,
+      addedAt: (card) => card.addedAt,
+      setName: (card) => card.setName ?? card.setCode,
+      collectorNumber: (card) => card.collectorNumber,
+      colorIdentity: (card) => card.colorIdentity,
+      qty: (card) => card.qty,
+    });
+  }, [mtgCards, profile.libraryView.mtg.sort, collectionScreen, activeSetCode, query]);
 
   const sortedDecks = useMemo(
     () =>
@@ -436,6 +433,7 @@ export default function LibraryScreen() {
 
   const placeholder = searchPlaceholder(tab, mtgMode, collectionScreen);
   const onCollectionOverview = tab === 'mtg' && mtgMode === 'collection' && collectionScreen === 'overview';
+  const onSetScreen = tab === 'mtg' && mtgMode === 'collection' && collectionScreen === 'set';
   const showLayout = tab !== 'mtg' || (mtgMode === 'collection' && !onCollectionOverview);
   const browsingEmpty = query.trim().length === 0 && (tab === 'mtg' || availability === 'all');
   const emptyAction =
@@ -449,7 +447,7 @@ export default function LibraryScreen() {
   }
   const activeSort = tab === 'mtg' && mtgMode === 'decks' ? deckSort : tab === 'mtg' ? mtgSort : catalogSort;
   const sortOptions = tab === 'mtg' && mtgMode === 'decks' ? DECK_SORTS : tab === 'mtg' ? MTG_COLLECTION_SORTS : CATALOG_SORTS;
-  if (!onCollectionOverview && activeSort !== 'title') {
+  if (!onCollectionOverview && !onSetScreen && activeSort !== 'title') {
     filterParts.push(sortOptions.find((option) => option.id === activeSort)?.label ?? activeSort);
   }
   const filtersNarrowing = filterParts.length > 0;
@@ -523,7 +521,7 @@ export default function LibraryScreen() {
               }}
             />
           ) : null}
-          {onCollectionOverview ? null : (
+          {onCollectionOverview || onSetScreen ? null : (
             <FilterChoices
               label="Sort"
               options={sortOptions}

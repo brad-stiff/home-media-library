@@ -207,3 +207,55 @@ export function cardInSet(card: Pick<OverviewCard, 'setCode'>, setCode: string):
   if (setCode === UNKNOWN_SET) return !(card.setCode ?? '').trim();
   return (card.setCode ?? '').trim().toLowerCase() === setCode;
 }
+
+type CollectorRank = {
+  /** 0 is the main set, 1 is a bonus sheet such as A-1, 2 has no number. */
+  band: number;
+  prefix: string;
+  number: number;
+  suffix: string;
+};
+
+const UNNUMBERED: CollectorRank = { band: 2, prefix: '', number: 0, suffix: '' };
+
+/** Checklist rank: 9, 10, 10a, then A-1, then a blank number. */
+function collectorRank(collectorNumber: string | null): CollectorRank {
+  const trimmed = collectorNumber?.trim().toLowerCase() ?? '';
+  if (!trimmed) return UNNUMBERED;
+
+  const main = /^0*(\d+)(.*)$/.exec(trimmed);
+  if (main) {
+    const number = Number(main[1]);
+    if (!Number.isFinite(number)) return UNNUMBERED;
+    return { band: 0, prefix: '', number, suffix: main[2] ?? '' };
+  }
+
+  const bonus = /^([a-z]+)[^a-z0-9]*0*(\d+)(.*)$/.exec(trimmed);
+  if (bonus) {
+    const number = Number(bonus[2]);
+    if (!Number.isFinite(number)) return UNNUMBERED;
+    return { band: 1, prefix: bonus[1] ?? '', number, suffix: bonus[3] ?? '' };
+  }
+
+  return UNNUMBERED;
+}
+
+function compareCollectorRank(a: CollectorRank, b: CollectorRank): number {
+  if (a.band !== b.band) return a.band - b.band;
+  const prefix = a.prefix.localeCompare(b.prefix);
+  if (prefix !== 0) return prefix;
+  if (a.number !== b.number) return a.number - b.number;
+  return a.suffix.localeCompare(b.suffix);
+}
+
+/** Set-screen order: collector number, then non-foil before foil, then name. */
+export function sortByCollectorNumber<T extends { name: string; collectorNumber: string | null; foil: boolean }>(
+  cards: readonly T[],
+): T[] {
+  return [...cards].sort((a, b) => {
+    const number = compareCollectorRank(collectorRank(a.collectorNumber), collectorRank(b.collectorNumber));
+    if (number !== 0) return number;
+    if (a.foil !== b.foil) return a.foil ? 1 : -1;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+}
