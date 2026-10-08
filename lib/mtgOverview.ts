@@ -1,16 +1,3 @@
-/** Card types drawn as their own bars. Anything else shares one Other bar. */
-export const MTG_CHART_TYPES = [
-  'Creature',
-  'Instant',
-  'Sorcery',
-  'Enchantment',
-  'Artifact',
-  'Planeswalker',
-  'Land',
-] as const;
-
-const SUPERTYPES = new Set(['Basic', 'Legendary', 'Snow', 'World', 'Ongoing', 'Elite', 'Host', 'Token']);
-
 export type OverviewCard = {
   scryfallId: string;
   setCode: string | null;
@@ -30,8 +17,13 @@ export type SetCatalogEntry = {
   iconSvgUri: string | null;
 };
 
-export type TypeBar = {
-  type: string;
+/** WUBRG, then colorless. Colorless is omitted from the header when its count is zero. */
+export const MANA_COLORS = ['W', 'U', 'B', 'R', 'G', 'C'] as const;
+
+export type ManaColor = (typeof MANA_COLORS)[number];
+
+export type ColorCount = {
+  color: ManaColor;
   count: number;
 };
 
@@ -50,21 +42,18 @@ export type SetSummary = {
 
 const UNKNOWN_SET = '__unknown__';
 
-export function chartTypesForTypeLine(typeLine: string | null): string[] {
-  if (!typeLine?.trim()) return ['Other'];
-  const buckets = new Set<string>();
-  for (const face of typeLine.split('//')) {
-    const head = face.split('—')[0] ?? face;
-    for (const word of head.trim().split(/\s+/)) {
-      if (!word || SUPERTYPES.has(word)) continue;
-      buckets.add((MTG_CHART_TYPES as readonly string[]).includes(word) ? word : 'Other');
-    }
-  }
-  if (buckets.size === 0) return ['Other'];
-  return [
-    ...MTG_CHART_TYPES.filter((type) => buckets.has(type)),
-    ...(buckets.has('Other') ? ['Other'] : []),
-  ];
+const COLOR_LETTERS = new Set<string>(['W', 'U', 'B', 'R', 'G']);
+
+function colorLetters(colorIdentity: string): ManaColor[] {
+  return [...colorIdentity.toUpperCase()].filter((letter): letter is ManaColor => COLOR_LETTERS.has(letter));
+}
+
+/** A printing matches a header color. Colorless is an identity with no WUBRG letters. */
+export function printingMatchesColor(colorIdentity: string | null, color: ManaColor): boolean {
+  if (colorIdentity == null) return false;
+  const letters = colorLetters(colorIdentity);
+  if (color === 'C') return letters.length === 0;
+  return letters.includes(color);
 }
 
 /** Foil and non-foil of the same set and collector number are one printing. */
@@ -113,24 +102,42 @@ export function collectorIdentity(collectorNumber: string | null): string | null
   return `${Number(match[1])}${match[2] ?? ''}`;
 }
 
-export function collectionTypeBars(cards: readonly OverviewCard[]): TypeBar[] {
-  const seen = new Map<string, Set<string>>();
-  for (const card of cards) {
-    const key = printingKey(card);
-    for (const type of chartTypesForTypeLine(card.typeLine)) {
-      const keys = seen.get(type) ?? new Set<string>();
-      keys.add(key);
-      seen.set(type, keys);
-    }
-  }
-  const order = [...MTG_CHART_TYPES, 'Other'];
-  return order
-    .filter((type) => (seen.get(type)?.size ?? 0) > 0)
-    .map((type) => ({ type, count: seen.get(type)?.size ?? 0 }));
-}
-
 export function collectionCopyTotal(cards: readonly Pick<OverviewCard, 'qty'>[]): number {
   return cards.reduce((sum, card) => sum + card.qty, 0);
+}
+
+export function collectionPrintingTotal(
+  cards: readonly Pick<OverviewCard, 'scryfallId' | 'setCode' | 'collectorNumber'>[],
+): number {
+  return new Set(cards.map((card) => printingKey(card))).size;
+}
+
+type IdentityCard = Pick<OverviewCard, 'scryfallId' | 'setCode' | 'collectorNumber'> & {
+  colorIdentity: string | null;
+};
+
+/**
+ * Printings in each color. A multicolor card counts once per color.
+ * Null identities are still waiting on Scryfall and are skipped.
+ * Returns null until at least one card has a resolved identity.
+ */
+export function collectionColorCounts(cards: readonly IdentityCard[]): ColorCount[] | null {
+  if (!cards.some((card) => card.colorIdentity != null)) return null;
+  const seen = new Map<ManaColor, Set<string>>(MANA_COLORS.map((color) => [color, new Set()]));
+  for (const card of cards) {
+    if (card.colorIdentity == null) continue;
+    const key = printingKey(card);
+    const letters = colorLetters(card.colorIdentity);
+    if (letters.length === 0) {
+      seen.get('C')?.add(key);
+      continue;
+    }
+    for (const letter of letters) seen.get(letter as ManaColor)?.add(key);
+  }
+  return MANA_COLORS.filter((color) => color !== 'C' || (seen.get(color)?.size ?? 0) > 0).map((color) => ({
+    color,
+    count: seen.get(color)?.size ?? 0,
+  }));
 }
 
 export function summarizeSets(

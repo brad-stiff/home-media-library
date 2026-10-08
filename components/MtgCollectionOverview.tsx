@@ -3,7 +3,7 @@ import { ReactNode } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
-import { SetSummary, TypeBar } from '../lib/mtgOverview';
+import { ColorCount, ManaColor, SetSummary } from '../lib/mtgOverview';
 import { radius, spacing, typeScale, useTheme } from '../lib/theme';
 import { ChevronIcon } from './icons';
 
@@ -11,12 +11,96 @@ const COLUMN_COUNT = 3;
 const RING_SIZE = 72;
 const RING_STROKE = 4;
 
+const MANA_SYMBOLS: Record<ManaColor, { label: string; uri: string }> = {
+  W: { label: 'White', uri: 'https://svgs.scryfall.io/card-symbols/W.svg' },
+  U: { label: 'Blue', uri: 'https://svgs.scryfall.io/card-symbols/U.svg' },
+  B: { label: 'Black', uri: 'https://svgs.scryfall.io/card-symbols/B.svg' },
+  R: { label: 'Red', uri: 'https://svgs.scryfall.io/card-symbols/R.svg' },
+  G: { label: 'Green', uri: 'https://svgs.scryfall.io/card-symbols/G.svg' },
+  C: { label: 'Colorless', uri: 'https://svgs.scryfall.io/card-symbols/C.svg' },
+};
+
+function tally(count: number, singular: string, plural: string): string {
+  return `${count.toLocaleString()} ${count === 1 ? singular : plural}`;
+}
+
+function ManaCount({
+  color,
+  count,
+  selected,
+  onSelect,
+}: {
+  color: ManaColor;
+  count: number;
+  selected: boolean;
+  onSelect?: (color: ManaColor) => void;
+}) {
+  const { colors } = useTheme();
+  const symbol = MANA_SYMBOLS[color];
+  const countLabel = count.toLocaleString();
+  const body = (
+    <>
+      <View style={[styles.manaMark, selected && { borderColor: colors.accent }]}>
+        <Image source={{ uri: symbol.uri }} style={styles.manaIcon} contentFit="contain" accessibilityLabel="" />
+      </View>
+      <Text style={[typeScale.caption, { color: colors.text }]}>{countLabel}</Text>
+    </>
+  );
+  if (count === 0 || !onSelect) {
+    return (
+      <View style={styles.mana} accessibilityLabel={`${symbol.label}, ${countLabel}`}>
+        {body}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={() => onSelect(color)}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={
+        selected ? `${symbol.label}, ${countLabel}, selected. Show every color` : `${symbol.label}, ${countLabel}. Show these cards`
+      }
+      style={styles.mana}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+export function ManaSymbolRow({
+  counts,
+  selected,
+  onSelect,
+}: {
+  counts: ColorCount[];
+  selected: ManaColor | null;
+  onSelect: (color: ManaColor) => void;
+}) {
+  return (
+    <View accessibilityRole="summary" accessibilityLabel="Colors in the collection" style={styles.manaRow}>
+      {counts.map((entry) => (
+        <ManaCount
+          key={entry.color}
+          color={entry.color}
+          count={entry.count}
+          selected={selected === entry.color}
+          onSelect={onSelect}
+        />
+      ))}
+    </View>
+  );
+}
+
 type MtgCollectionOverviewProps = {
-  bars: TypeBar[];
+  colorCounts: ColorCount[] | null;
   copies: number;
+  printings: number;
+  setCount: number;
   sets: SetSummary[];
   onOpenSet: (code: string) => void;
   onOpenAll: () => void;
+  onSelectColor: (color: ManaColor) => void;
   bottomPad: number;
   filtering: boolean;
   refreshing: boolean;
@@ -102,11 +186,14 @@ function CompletionRing({
 }
 
 export function MtgCollectionOverview({
-  bars,
+  colorCounts,
   copies,
+  printings,
+  setCount,
   sets,
   onOpenSet,
   onOpenAll,
+  onSelectColor,
   bottomPad,
   filtering,
   refreshing,
@@ -114,8 +201,12 @@ export function MtgCollectionOverview({
   footer,
 }: MtgCollectionOverviewProps) {
   const { colors } = useTheme();
-  const max = Math.max(...bars.map((bar) => bar.count), 1);
   const tiles = gridTiles(sets);
+  const totals = [
+    tally(copies, 'card', 'cards'),
+    tally(printings, 'printing', 'printings'),
+    tally(setCount, 'set', 'sets'),
+  ].join(' · ');
 
   return (
     <FlatList
@@ -130,29 +221,17 @@ export function MtgCollectionOverview({
       ListFooterComponent={footer ? <View>{footer}</View> : null}
       ListHeaderComponent={
         <View style={styles.header}>
-          <Text style={[typeScale.label, { color: colors.textTertiary }]}>Card types</Text>
-          <View accessibilityRole="summary" accessibilityLabel="Card types in the collection">
-            {bars.map((bar) => (
-              <View key={bar.type} style={styles.barRow} accessibilityLabel={`${bar.type}, ${bar.count}`}>
-                <Text style={[styles.barLabel, typeScale.caption, { color: colors.text }]}>{bar.type}</Text>
-                <View style={[styles.track, { backgroundColor: colors.surfaceElevated }]}>
-                  <View
-                    style={[
-                      styles.fill,
-                      { width: `${Math.max(4, Math.round((bar.count / max) * 100))}%`, backgroundColor: colors.accent },
-                    ]}
-                  />
-                </View>
-                <Text style={[styles.barCount, typeScale.caption, { color: colors.textSecondary }]}>{bar.count}</Text>
-              </View>
-            ))}
-          </View>
-          <Text style={[typeScale.body, { color: colors.text }]}>
-            {copies.toLocaleString()} {copies === 1 ? 'card' : 'cards'} in the collection
+          <Text accessibilityRole="summary" style={[typeScale.body, { color: colors.text }]}>
+            {totals}
           </Text>
-          <Text style={[typeScale.caption, { color: colors.textTertiary }]}>
-            Bars count each printing once. A card with more than one type is counted in each bar.
-          </Text>
+          {colorCounts ? (
+            <>
+              <ManaSymbolRow counts={colorCounts} selected={null} onSelect={onSelectColor} />
+              <Text style={[typeScale.caption, { color: colors.textTertiary }]}>
+                A multicolor card counts in each of its colors.
+              </Text>
+            </>
+          ) : null}
           <Pressable
             onPress={onOpenAll}
             accessibilityRole="button"
@@ -225,28 +304,26 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
-  barRow: {
+  manaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    minHeight: 28,
+    alignItems: 'flex-start',
   },
-  barLabel: {
-    width: 108,
-  },
-  track: {
+  mana: {
     flex: 1,
-    height: 8,
-    borderRadius: radius.sm,
-    overflow: 'hidden',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minWidth: 0,
+    minHeight: 44,
   },
-  fill: {
-    height: 8,
-    borderRadius: radius.sm,
+  manaMark: {
+    borderWidth: 2,
+    borderColor: 'transparent',
+    borderRadius: 22,
+    padding: 2,
   },
-  barCount: {
+  manaIcon: {
     width: 36,
-    textAlign: 'right',
+    height: 36,
   },
   allCards: {
     minHeight: 44,

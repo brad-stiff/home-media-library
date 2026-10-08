@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   cardInSet,
   cardMatchesQuery,
-  chartTypesForTypeLine,
+  collectionColorCounts,
   collectionCopyTotal,
-  collectionTypeBars,
+  collectionPrintingTotal,
+  printingMatchesColor,
   filterSetSummaries,
   checklistSize,
   inPrintedSet,
@@ -29,42 +30,82 @@ function card(partial: Partial<OverviewCard> & Pick<OverviewCard, 'scryfallId'>)
   };
 }
 
-describe('chartTypesForTypeLine', () => {
-  it('keeps each type on a multi-type card and skips supertypes', () => {
-    expect(chartTypesForTypeLine('Legendary Artifact Creature — Golem')).toEqual(['Creature', 'Artifact']);
-    expect(chartTypesForTypeLine('Basic Land — Forest')).toEqual(['Land']);
-    expect(chartTypesForTypeLine('Token Creature — Goblin')).toEqual(['Creature']);
-  });
-
-  it('puts uncommon types in Other and reads both faces', () => {
-    expect(chartTypesForTypeLine('Battle — Siege')).toEqual(['Other']);
-    expect(chartTypesForTypeLine('Kindred Sorcery')).toEqual(['Sorcery', 'Other']);
-    expect(chartTypesForTypeLine('Instant // Sorcery')).toEqual(['Instant', 'Sorcery']);
-    expect(chartTypesForTypeLine(null)).toEqual(['Other']);
+describe('collection totals', () => {
+  it('sums copies and collapses foil with non-foil into one printing', () => {
+    const cards = [
+      card({ scryfallId: 'a', collectorNumber: '1', qty: 4 }),
+      card({ scryfallId: 'a-foil', collectorNumber: '1', qty: 2 }),
+      card({ scryfallId: 'c', collectorNumber: '2', qty: 1 }),
+    ];
+    expect(collectionCopyTotal(cards)).toBe(7);
+    expect(collectionPrintingTotal(cards)).toBe(2);
   });
 });
 
-describe('collectionTypeBars', () => {
-  it('counts a printing once across foil and non-foil, and a multi-type card in each bar', () => {
-    const cards = [
-      card({ scryfallId: 'a', collectorNumber: '1', typeLine: 'Artifact Creature — Golem', qty: 4 }),
-      card({ scryfallId: 'a-foil', collectorNumber: '1', typeLine: 'Artifact Creature — Golem', qty: 2 }),
-      card({ scryfallId: 'c', collectorNumber: '2', typeLine: 'Instant', qty: 1 }),
-    ];
-    expect(collectionTypeBars(cards)).toEqual([
-      { type: 'Creature', count: 1 },
-      { type: 'Instant', count: 1 },
-      { type: 'Artifact', count: 1 },
+describe('collectionColorCounts', () => {
+  it('counts a multicolor printing in each color and a colorless printing once', () => {
+    expect(
+      collectionColorCounts([
+        { ...card({ scryfallId: 'a', collectorNumber: '1', qty: 4 }), colorIdentity: 'WU' },
+        { ...card({ scryfallId: 'a-foil', collectorNumber: '1', qty: 2 }), colorIdentity: 'WU' },
+        { ...card({ scryfallId: 'b', collectorNumber: '2' }), colorIdentity: '' },
+        { ...card({ scryfallId: 'c', collectorNumber: '3' }), colorIdentity: null },
+      ]),
+    ).toEqual([
+      { color: 'W', count: 1 },
+      { color: 'U', count: 1 },
+      { color: 'B', count: 0 },
+      { color: 'R', count: 0 },
+      { color: 'G', count: 0 },
+      { color: 'C', count: 1 },
     ]);
-    expect(collectionCopyTotal(cards)).toBe(7);
   });
 
-  it('counts two printings of the same name separately', () => {
-    const bars = collectionTypeBars([
-      card({ scryfallId: 'a', setCode: 'lea', collectorNumber: '161', typeLine: 'Instant' }),
-      card({ scryfallId: 'b', setCode: 'm10', collectorNumber: '146', typeLine: 'Instant' }),
+  it('counts two printings of the same color separately and hides colorless at zero', () => {
+    expect(
+      collectionColorCounts([
+        { ...card({ scryfallId: 'a', setCode: 'lea', collectorNumber: '161' }), colorIdentity: 'R' },
+        { ...card({ scryfallId: 'b', setCode: 'm10', collectorNumber: '146' }), colorIdentity: 'R' },
+      ]),
+    ).toEqual([
+      { color: 'W', count: 0 },
+      { color: 'U', count: 0 },
+      { color: 'B', count: 0 },
+      { color: 'R', count: 2 },
+      { color: 'G', count: 0 },
     ]);
-    expect(bars).toEqual([{ type: 'Instant', count: 2 }]);
+  });
+
+  it('waits until Scryfall has resolved an identity', () => {
+    expect(collectionColorCounts([{ ...card({ scryfallId: 'a' }), colorIdentity: null }])).toBeNull();
+  });
+
+  it('keeps the header count equal to the printings that match that color', () => {
+    const cards = [
+      { ...card({ scryfallId: 'a', collectorNumber: '1', qty: 4 }), colorIdentity: 'WU' },
+      { ...card({ scryfallId: 'a-foil', collectorNumber: '1', qty: 2 }), colorIdentity: 'WU' },
+      { ...card({ scryfallId: 'b', collectorNumber: '2' }), colorIdentity: '' },
+      { ...card({ scryfallId: 'c', collectorNumber: '3' }), colorIdentity: null },
+    ];
+    const counts = collectionColorCounts(cards);
+    expect(counts).not.toBeNull();
+    for (const entry of counts ?? []) {
+      const matched = new Set(
+        cards.filter((item) => printingMatchesColor(item.colorIdentity, entry.color)).map((item) => `${item.setCode}:${item.collectorNumber}`),
+      );
+      expect(matched.size).toBe(entry.count);
+    }
+  });
+
+  it('matches each color a printing contains, and colorless only when it has none', () => {
+    expect(printingMatchesColor('WU', 'W')).toBe(true);
+    expect(printingMatchesColor('WU', 'U')).toBe(true);
+    expect(printingMatchesColor('WU', 'B')).toBe(false);
+    expect(printingMatchesColor('WU', 'C')).toBe(false);
+    expect(printingMatchesColor('', 'C')).toBe(true);
+    expect(printingMatchesColor('', 'W')).toBe(false);
+    expect(printingMatchesColor(null, 'C')).toBe(false);
+    expect(printingMatchesColor(null, 'R')).toBe(false);
   });
 });
 

@@ -38,7 +38,7 @@ import {
 } from '../../lib/libraryView';
 import { searchMoviesInLibrary } from '../../lib/movies';
 import { addMtgCardFromScryfall, attachCardBacks, attachColorIdentities, MtgCard, searchMtgCollection } from '../../lib/mtgCards';
-import { cardInSet, cardMatchesQuery, checklistSize, collectionCopyTotal, collectionTypeBars, filterSetSummaries, groupOwnedPrintings, mergePrintedChecklist, PrintedSlot, SetCatalogEntry, sortByCollectorNumber, summarizeSets } from '../../lib/mtgOverview';
+import { cardInSet, cardMatchesQuery, checklistSize, collectionColorCounts, collectionCopyTotal, collectionPrintingTotal, filterSetSummaries, groupOwnedPrintings, ManaColor, mergePrintedChecklist, printingMatchesColor, PrintedSlot, SetCatalogEntry, sortByCollectorNumber, summarizeSets } from '../../lib/mtgOverview';
 import { loadMtgSetCatalog, loadPrintedChecklist } from '../../lib/mtgSets';
 import { getScryfallCard } from '../../lib/scryfall';
 import { listMtgDecks, MtgDeck } from '../../lib/mtgDecks';
@@ -94,6 +94,7 @@ export default function LibraryScreen() {
   const [tab, setTab] = useState<DockType | null>(null);
   const [mtgMode, setMtgMode] = useState<MtgMode>('collection');
   const [collectionScreen, setCollectionScreen] = useState<CollectionScreen>('overview');
+  const [colorFilter, setColorFilter] = useState<ManaColor | null>(null);
   const [activeSetCode, setActiveSetCode] = useState<string | null>(null);
   const [setCatalog, setSetCatalog] = useState<Map<string, SetCatalogEntry>>(new Map());
   const [printedSlots, setPrintedSlots] = useState<PrintedSlot[] | null>(null);
@@ -294,8 +295,9 @@ export default function LibraryScreen() {
     }
   }, []);
 
-  const typeBars = useMemo(() => collectionTypeBars(mtgCards), [mtgCards]);
   const copyTotal = useMemo(() => collectionCopyTotal(mtgCards), [mtgCards]);
+  const printingTotal = useMemo(() => collectionPrintingTotal(mtgCards), [mtgCards]);
+  const colorCounts = useMemo(() => collectionColorCounts(mtgCards), [mtgCards]);
   const setSummaries = useMemo(() => summarizeSets(mtgCards, setCatalog), [mtgCards, setCatalog]);
   const visibleSets = useMemo(
     () => (collectionScreen === 'overview' ? filterSetSummaries(setSummaries, query) : setSummaries),
@@ -313,20 +315,32 @@ export default function LibraryScreen() {
   const leaveCollectionDrill = useCallback(() => {
     setCollectionScreen('overview');
     setActiveSetCode(null);
+    setColorFilter(null);
     setQueries((prev) => ({ ...prev, 'mtg-collection': '' }));
   }, []);
 
   const openSet = useCallback((code: string) => {
     setActiveSetCode(code);
+    setColorFilter(null);
     setCollectionScreen('set');
     setQueries((prev) => ({ ...prev, 'mtg-collection': '' }));
   }, []);
 
   const openAllCards = useCallback(() => {
     setActiveSetCode(null);
+    setColorFilter(null);
     setCollectionScreen('all');
     setQueries((prev) => ({ ...prev, 'mtg-collection': '' }));
   }, []);
+
+  const selectColor = useCallback((color: ManaColor) => {
+    setColorFilter((current) => (current === color ? null : color));
+    if (collectionScreen !== 'all') {
+      setActiveSetCode(null);
+      setCollectionScreen('all');
+      setQueries((prev) => ({ ...prev, 'mtg-collection': '' }));
+    }
+  }, [collectionScreen]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -390,6 +404,7 @@ export default function LibraryScreen() {
     const matched = mtgCards.filter((card) => {
       if (collectionScreen === 'set' && activeSetCode && !cardInSet(card, activeSetCode)) return false;
       if (collectionScreen === 'overview') return false;
+      if (collectionScreen === 'all' && colorFilter && !printingMatchesColor(card.colorIdentity, colorFilter)) return false;
       return cardMatchesQuery(card, query);
     });
     if (collectionScreen === 'set') {
@@ -410,7 +425,7 @@ export default function LibraryScreen() {
       colorIdentity: (entry) => entry.nonfoil?.colorIdentity ?? entry.foil?.colorIdentity ?? null,
       qty: (entry) => (entry.nonfoil?.qty ?? 0) + (entry.foil?.qty ?? 0),
     });
-  }, [mtgCards, profile.libraryView.mtg.sort, collectionScreen, activeSetCode, query, printedSlots, activePrintedSize]);
+  }, [mtgCards, profile.libraryView.mtg.sort, collectionScreen, activeSetCode, colorFilter, query, printedSlots, activePrintedSize]);
 
   const sortedDecks = useMemo(
     () =>
@@ -544,6 +559,7 @@ export default function LibraryScreen() {
               setMtgMode(mode);
               setCollectionScreen('overview');
               setActiveSetCode(null);
+              setColorFilter(null);
             }}
           />
         </View>
@@ -665,12 +681,16 @@ export default function LibraryScreen() {
             writer={writer}
             layout={layout}
             compact={compact}
-            typeBars={typeBars}
+            colorCounts={colorCounts}
             copies={copyTotal}
+            printings={printingTotal}
+            setCount={setSummaries.length}
             sets={visibleSets}
             filtering={query.trim().length > 0}
             onOpenSet={openSet}
             onOpenAll={openAllCards}
+            selectedColor={colorFilter}
+            onSelectColor={selectColor}
             emptyAction={emptyAction}
             bottomPad={listPad}
             refreshing={refreshing}

@@ -4,12 +4,12 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 
 import { LibraryLayout } from '../../lib/libraryView';
 import { MtgCard } from '../../lib/mtgCards';
-import { ChecklistEntry, SetSummary, TypeBar } from '../../lib/mtgOverview';
+import { ChecklistEntry, ColorCount, ManaColor, SetSummary } from '../../lib/mtgOverview';
 import { radius, spacing, typeScale, useTheme } from '../../lib/theme';
 import { EmptyState } from '../EmptyState';
 import { ChevronIcon } from '../icons';
 import { MtgCardImage } from '../MtgCardImage';
-import { MtgCollectionOverview } from '../MtgCollectionOverview';
+import { ManaSymbolRow, MtgCollectionOverview } from '../MtgCollectionOverview';
 
 type CollectionScreen = 'overview' | 'set' | 'all';
 
@@ -20,12 +20,16 @@ type MtgCollectionResultsProps = {
   writer: boolean;
   layout: LibraryLayout;
   compact: boolean;
-  typeBars: TypeBar[];
+  colorCounts: ColorCount[] | null;
   copies: number;
+  printings: number;
+  setCount: number;
   sets: SetSummary[];
   filtering: boolean;
   onOpenSet: (code: string) => void;
   onOpenAll: () => void;
+  selectedColor: ManaColor | null;
+  onSelectColor: (color: ManaColor) => void;
   onAddFinish?: (scryfallId: string, foil: boolean) => void;
   addingFinish?: { scryfallId: string; foil: boolean } | null;
   emptyAction?: { label: string; onPress: () => void };
@@ -313,12 +317,16 @@ export function MtgCollectionResults({
   writer,
   layout,
   compact,
-  typeBars,
+  colorCounts,
   copies,
+  printings,
+  setCount,
   sets,
   filtering,
   onOpenSet,
   onOpenAll,
+  selectedColor,
+  onSelectColor,
   onAddFinish,
   addingFinish = null,
   emptyAction,
@@ -349,11 +357,14 @@ export function MtgCollectionResults({
   if (screen === 'overview') {
     return (
       <MtgCollectionOverview
-        bars={typeBars}
+        colorCounts={colorCounts}
         copies={copies}
+        printings={printings}
+        setCount={setCount}
         sets={sets}
         onOpenSet={onOpenSet}
         onOpenAll={onOpenAll}
+        onSelectColor={onSelectColor}
         bottomPad={bottomPad}
         filtering={filtering}
         refreshing={refreshing}
@@ -363,7 +374,7 @@ export function MtgCollectionResults({
     );
   }
 
-  if (entries.length === 0) {
+  if (entries.length === 0 && screen !== 'all') {
     return (
       <EmptyState
         title="No matches"
@@ -373,6 +384,13 @@ export function MtgCollectionResults({
       />
     );
   }
+
+  const colorHeader =
+    screen === 'all' && colorCounts ? (
+      <View style={styles.colorHeader}>
+        <ManaSymbolRow counts={colorCounts} selected={selectedColor} onSelect={onSelectColor} />
+      </View>
+    ) : null;
 
   return (
     <FlatList
@@ -391,6 +409,14 @@ export function MtgCollectionResults({
       refreshControl={refreshControl}
       columnWrapperStyle={layout === 'grid' ? styles.row : undefined}
       contentContainerStyle={layout === 'grid' ? [styles.grid, listPad] : [styles.list, listPad]}
+      ListHeaderComponent={colorHeader}
+      ListEmptyComponent={
+        <Text style={[typeScale.body, { color: colors.textSecondary, paddingVertical: spacing.md }]}>
+          {selectedColor
+            ? 'No matches. Try another name, or choose another color.'
+            : 'No matches. Try another name, or go back to the collection overview.'}
+        </Text>
+      }
       ListFooterComponent={footer ? <View>{footer}</View> : null}
       renderItem={({ item }) => (
         <ChecklistRow
@@ -416,6 +442,9 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
+  },
+  colorHeader: {
+    marginBottom: spacing.sm,
   },
   listRowCompact: {
     padding: spacing.sm,
