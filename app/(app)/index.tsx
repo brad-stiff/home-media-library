@@ -503,7 +503,7 @@ export default function LibraryScreen() {
   const placeholder = searchPlaceholder(tab, mtgMode, collectionScreen);
   const onCollectionOverview = tab === 'mtg' && mtgMode === 'collection' && collectionScreen === 'overview';
   const onSetScreen = tab === 'mtg' && mtgMode === 'collection' && collectionScreen === 'set';
-  const showLayout = tab !== 'mtg' || (mtgMode === 'collection' && !onCollectionOverview);
+  const showLayout = tab !== 'mtg' || mtgMode === 'collection';
   const browsingEmpty = query.trim().length === 0 && (tab === 'mtg' || availability === 'all');
   const emptyAction =
     writer && browsingEmpty && actions[0]
@@ -516,7 +516,7 @@ export default function LibraryScreen() {
   }
   const activeSort = tab === 'mtg' && mtgMode === 'decks' ? deckSort : tab === 'mtg' ? mtgSort : catalogSort;
   const sortOptions = tab === 'mtg' && mtgMode === 'decks' ? DECK_SORTS : tab === 'mtg' ? MTG_COLLECTION_SORTS : CATALOG_SORTS;
-  if (!onCollectionOverview && !onSetScreen && activeSort !== 'title') {
+  if (!onSetScreen && activeSort !== 'title') {
     filterParts.push(sortOptions.find((option) => option.id === activeSort)?.label ?? activeSort);
   }
   const filtersNarrowing = filterParts.length > 0;
@@ -565,19 +565,21 @@ export default function LibraryScreen() {
         </View>
       ) : null}
 
-      <Pressable
-        onPress={() => setFiltersOpen((open) => !open)}
-        accessibilityRole="button"
-        accessibilityLabel={filtersLabel}
-        accessibilityState={{ expanded: filtersOpen }}
-        style={styles.filtersButton}
-      >
-        <Text style={[typeScale.label, { color: filtersOpen || filtersNarrowing ? colors.accent : colors.textSecondary, fontSize: 14 }]}>
-          {filtersOpen ? 'Hide filters' : filtersVisible}
-        </Text>
-      </Pressable>
+      {onCollectionOverview ? null : (
+        <Pressable
+          onPress={() => setFiltersOpen((open) => !open)}
+          accessibilityRole="button"
+          accessibilityLabel={filtersLabel}
+          accessibilityState={{ expanded: filtersOpen }}
+          style={styles.filtersButton}
+        >
+          <Text style={[typeScale.label, { color: filtersOpen || filtersNarrowing ? colors.accent : colors.textSecondary, fontSize: 14 }]}>
+            {filtersOpen ? 'Hide filters' : filtersVisible}
+          </Text>
+        </Pressable>
+      )}
 
-      {filtersOpen ? (
+      {filtersOpen && !onCollectionOverview ? (
         <View style={styles.filters}>
           {tab !== 'mtg' && lendingOn ? (
             <FilterChoices
@@ -591,7 +593,7 @@ export default function LibraryScreen() {
               }}
             />
           ) : null}
-          {onCollectionOverview || onSetScreen ? null : (
+          {onSetScreen ? null : (
             <FilterChoices
               label="Sort"
               options={sortOptions}
