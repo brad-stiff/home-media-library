@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { deckWarnings, type DeckBoard, type LegalityCard } from './deckLegality';
+import { deckTileIdentity, deckWarnings, type DeckBoard, type LegalityCard } from './deckLegality';
 
 function card(patch: Partial<LegalityCard> & Pick<LegalityCard, 'name'>): LegalityCard {
   return {
@@ -251,5 +251,43 @@ describe('Standard legality', () => {
         (warning) => warning.includes("don't have a commander"),
       ),
     ).toBe(true);
+  });
+});
+
+describe('deck tile colors', () => {
+  it('uses the commander identity and combines partners', () => {
+    expect(
+      deckTileIdentity('commander', [
+        card({ name: 'Thrasios', board: 'commander', colorIdentity: 'UG' }),
+        card({ name: 'Tymna', board: 'commander', colorIdentity: 'WB' }),
+        card({ name: 'Bolt', colorIdentity: 'R' }),
+      ]),
+    ).toBe('WUBG');
+  });
+
+  it('waits when the commander identity has not been read', () => {
+    expect(deckTileIdentity('commander', [card({ name: 'Atraxa', board: 'commander', colorIdentity: null })])).toBeNull();
+    expect(deckTileIdentity('commander', [card({ name: 'Karn', board: 'commander', colorIdentity: '' })])).toBe('');
+    expect(deckTileIdentity('commander', [])).toBeNull();
+  });
+
+  it('uses main-deck colors and ignores the sideboard', () => {
+    expect(
+      deckTileIdentity('standard', [
+        card({ name: 'Bolt', colorIdentity: 'R' }),
+        card({ name: 'Counterspell', colorIdentity: 'U' }),
+        card({ name: 'Rest in Peace', board: 'sideboard', colorIdentity: 'W' }),
+      ]),
+    ).toBe('UR');
+  });
+
+  it('skips unread main-deck cards and still shows the colors that are known', () => {
+    expect(
+      deckTileIdentity('standard', [
+        card({ name: 'Bolt', colorIdentity: 'R' }),
+        card({ name: 'Unread', colorIdentity: null }),
+      ]),
+    ).toBe('R');
+    expect(deckTileIdentity('standard', [card({ name: 'Unread', colorIdentity: null })])).toBeNull();
   });
 });

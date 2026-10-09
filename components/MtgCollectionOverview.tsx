@@ -3,7 +3,7 @@ import { ReactNode } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
-import { ColorCount, ManaColor, SetSummary } from '../lib/mtgOverview';
+import { ColorCount, MANA_COLORS, ManaColor, SetSummary } from '../lib/mtgOverview';
 import { radius, spacing, typeScale, useTheme } from '../lib/theme';
 import { ChevronIcon } from './icons';
 
@@ -65,6 +65,30 @@ function ManaCount({
     >
       {body}
     </Pressable>
+  );
+}
+
+/** WUBRG letters, '' for colorless, or null when the colors are not known yet. */
+export function ManaIdentity({ identity, box }: { identity: string | null; box: number }) {
+  if (identity == null) return <View style={{ width: box, height: box }} />;
+  const letters: ManaColor[] = identity.length === 0 ? ['C'] : MANA_COLORS.filter((color): color is ManaColor => color !== 'C' && identity.includes(color));
+  const icon = letters.length >= 5 ? 16 : letters.length >= 3 ? 20 : letters.length === 2 ? 26 : 32;
+  return (
+    <View
+      style={[styles.identity, { width: box, height: box }]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      {letters.map((letter) => (
+        <Image
+          key={letter}
+          source={{ uri: MANA_SYMBOLS[letter].uri }}
+          style={{ width: icon, height: icon }}
+          contentFit="contain"
+          accessibilityLabel=""
+        />
+      ))}
+    </View>
   );
 }
 
@@ -324,6 +348,14 @@ const styles = StyleSheet.create({
   manaIcon: {
     width: 36,
     height: 36,
+  },
+  identity: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    alignContent: 'center',
+    justifyContent: 'center',
+    gap: 2,
   },
   allCards: {
     minHeight: 44,

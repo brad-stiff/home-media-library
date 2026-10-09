@@ -3,13 +3,20 @@ import { ReactNode } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 
 import { formatLabel } from '../../lib/deckLegality';
-import { MtgDeck } from '../../lib/mtgDecks';
+import { MtgDeckListItem } from '../../lib/mtgDecks';
 import { radius, spacing, typeScale, useTheme } from '../../lib/theme';
 import { EmptyState } from '../EmptyState';
-import { ChevronIcon } from '../icons';
+import { ManaIdentity } from '../MtgCollectionOverview';
+
+const COLUMN_COUNT = 3;
+const PIP_BOX = 72;
+const PIP_BOX_COMPACT = 60;
+
+type PadTile = { id: string; pad: true };
+type GridTile = MtgDeckListItem | PadTile;
 
 type MtgDeckResultsProps = {
-  decks: MtgDeck[];
+  decks: MtgDeckListItem[];
   query: string;
   writer: boolean;
   compact: boolean;
@@ -19,6 +26,39 @@ type MtgDeckResultsProps = {
   onRefresh: () => void;
   footer?: ReactNode;
 };
+
+const COLOR_NAMES: Record<string, string> = {
+  W: 'white',
+  U: 'blue',
+  B: 'black',
+  R: 'red',
+  G: 'green',
+};
+
+function colorPhrase(identity: string | null): string | null {
+  if (identity == null) return null;
+  if (identity.length === 0) return 'colorless';
+  return [...identity].map((letter) => COLOR_NAMES[letter] ?? letter).join(', ');
+}
+
+function tileLabel(deck: MtgDeckListItem): string {
+  const colors = colorPhrase(deck.colors);
+  return [deck.name, formatLabel(deck.format), colors, deck.archidektId ? 'from Archidekt' : null].filter(Boolean).join(', ');
+}
+
+function gridTiles(decks: MtgDeckListItem[]): GridTile[] {
+  if (decks.length === 0) return [];
+  const remainder = decks.length % COLUMN_COUNT;
+  if (remainder === 0) return decks;
+  return [
+    ...decks,
+    ...Array.from({ length: COLUMN_COUNT - remainder }, (_, index) => ({ id: `pad-${index}`, pad: true as const })),
+  ];
+}
+
+function isPad(item: GridTile): item is PadTile {
+  return 'pad' in item;
+}
 
 export function MtgDeckResults({
   decks,
@@ -33,6 +73,7 @@ export function MtgDeckResults({
 }: MtgDeckResultsProps) {
   const router = useRouter();
   const { colors } = useTheme();
+  const tiles = gridTiles(decks);
 
   if (decks.length === 0) {
     return (
@@ -52,34 +93,42 @@ export function MtgDeckResults({
 
   return (
     <FlatList
-      data={decks}
+      data={tiles}
+      numColumns={COLUMN_COUNT}
+      columnWrapperStyle={styles.row}
       keyExtractor={(item) => item.id}
       keyboardDismissMode="on-drag"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}
       ListFooterComponent={footer ? <View>{footer}</View> : null}
-      renderItem={({ item }) => (
-        <Pressable
-          onPress={() => router.push(`/mtg/deck/${item.id}`)}
-          accessibilityRole="button"
-          accessibilityLabel={item.name}
-          style={[
-            styles.listRow,
-            compact && styles.listRowCompact,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.listMeta}>
-            <Text style={[typeScale.body, { color: colors.text, fontWeight: '600' }]}>{item.name}</Text>
-            <Text style={[typeScale.caption, { color: colors.textSecondary }]}>
-              {[formatLabel(item.format), item.archidektId ? `Archidekt ${item.archidektId}` : null]
-                .filter(Boolean)
-                .join(' · ')}
+      renderItem={({ item }) => {
+        if (isPad(item)) return <View style={styles.tile} />;
+        return (
+          <Pressable
+            onPress={() => router.push(`/mtg/deck/${item.id}`)}
+            accessibilityRole="button"
+            accessibilityLabel={tileLabel(item)}
+            style={({ pressed }) => [
+              styles.tile,
+              styles.tileFace,
+              compact && styles.tileCompact,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              pressed && styles.tilePressed,
+            ]}
+          >
+            <ManaIdentity identity={item.colors} box={compact ? PIP_BOX_COMPACT : PIP_BOX} />
+            <Text style={[typeScale.caption, styles.name, { color: colors.text }]} numberOfLines={2}>
+              {item.name}
             </Text>
-          </View>
-          <ChevronIcon color={colors.textTertiary} />
-        </Pressable>
-      )}
+            <Text style={[typeScale.caption, styles.detail, { color: colors.textSecondary }]} numberOfLines={1}>
+              {formatLabel(item.format)}
+            </Text>
+            <Text style={[typeScale.caption, styles.mark, { color: colors.textTertiary }]} numberOfLines={1}>
+              {item.archidektId ? 'Archidekt' : ''}
+            </Text>
+          </Pressable>
+        );
+      }}
     />
   );
 }
@@ -89,18 +138,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
-  listRow: {
-    flexDirection: 'row',
+  row: {
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  tile: {
+    flex: 1,
     alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
+    gap: spacing.xs,
+    minHeight: 44,
+  },
+  tileFace: {
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
-  listRowCompact: {
-    padding: spacing.sm,
-    gap: spacing.sm,
+  tileCompact: {
+    paddingVertical: spacing.xs,
   },
-  listMeta: { flex: 1, gap: 2 },
+  tilePressed: {
+    opacity: 0.7,
+  },
+  name: {
+    fontWeight: '600',
+    textAlign: 'center',
+    width: '100%',
+  },
+  detail: {
+    textAlign: 'center',
+    width: '100%',
+  },
+  mark: {
+    textAlign: 'center',
+    width: '100%',
+    minHeight: 18,
+  },
 });

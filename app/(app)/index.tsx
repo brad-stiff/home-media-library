@@ -41,7 +41,7 @@ import { addMtgCardFromScryfall, attachCardBacks, attachColorIdentities, MtgCard
 import { cardInSet, cardMatchesQuery, checklistSize, collectionColorCounts, collectionCopyTotal, collectionPrintingTotal, filterSetSummaries, groupOwnedPrintings, ManaColor, mergePrintedChecklist, printingMatchesColor, PrintedSlot, SetCatalogEntry, sortByCollectorNumber, summarizeSets } from '../../lib/mtgOverview';
 import { loadMtgSetCatalog, loadPrintedChecklist } from '../../lib/mtgSets';
 import { getScryfallCard } from '../../lib/scryfall';
-import { listMtgDecks, MtgDeck } from '../../lib/mtgDecks';
+import { listMtgDeckTiles, MtgDeckListItem } from '../../lib/mtgDecks';
 import { takeLibraryTab } from '../../lib/pendingLibraryTab';
 import { isTypeVisible, useProfile } from '../../lib/profile';
 import { isWriter } from '../../lib/roles';
@@ -104,7 +104,7 @@ export default function LibraryScreen() {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [mtgCards, setMtgCards] = useState<MtgCard[]>([]);
-  const [mtgDecks, setMtgDecks] = useState<MtgDeck[]>([]);
+  const [mtgDecks, setMtgDecks] = useState<MtgDeckListItem[]>([]);
   const [checkouts, setCheckouts] = useState<Map<string, Checkout>>(new Map());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -201,7 +201,7 @@ export default function LibraryScreen() {
           // Set, title, and quantity sorts still work if Scryfall is unreachable.
         }
       } else {
-        const decks = await listMtgDecks();
+        const decks = await listMtgDeckTiles();
         const trimmed = searchQuery.trim().toLowerCase();
         setMtgDecks(trimmed ? decks.filter((deck) => deck.name.toLowerCase().includes(trimmed)) : decks);
       }

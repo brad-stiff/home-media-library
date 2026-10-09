@@ -45,6 +45,24 @@ export function colorIdentityKey(colors: readonly string[] | null | undefined): 
   return COLOR_ORDER.filter((color) => present.has(color)).join('');
 }
 
+/**
+ * Colors for a deck tile.
+ * Commander uses the commander's identity, including partners.
+ * Standard uses colors on the main deck and ignores the sideboard.
+ * '' is colorless. Null means that identity is not known yet.
+ */
+export function deckTileIdentity(
+  format: DeckFormat,
+  cards: readonly Pick<LegalityCard, 'board' | 'colorIdentity'>[],
+): string | null {
+  const relevant = cards.filter((card) => (format === 'commander' ? card.board === 'commander' : card.board === 'main'));
+  if (relevant.length === 0) return null;
+  if (format === 'commander' && relevant.some((card) => card.colorIdentity == null)) return null;
+  const known = relevant.filter((card) => card.colorIdentity != null);
+  if (known.length === 0) return null;
+  return colorIdentityKey(known.flatMap((card) => (card.colorIdentity ?? '').split('')));
+}
+
 export function foldCardName(name: string): string {
   return name.trim().toLowerCase().replaceAll('û', 'u').replaceAll('ü', 'u');
 }

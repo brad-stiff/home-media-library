@@ -3,6 +3,7 @@ import {
   categoryForBoard,
   colorIdentityKey,
   DeckBoard,
+  deckTileIdentity,
   DeckFormat,
   isDeckBoard,
   isDeckFormat,
@@ -32,6 +33,11 @@ export type MtgDeck = {
   createdByName: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+/** A deck plus the colors its tile shows. '' is colorless. Null means the colors are not known yet. */
+export type MtgDeckListItem = MtgDeck & {
+  colors: string | null;
 };
 
 export type MtgDeckCard = {
@@ -220,6 +226,28 @@ export async function listMtgDecks(): Promise<MtgDeck[]> {
       .range(from, to),
   );
   return rows.map(rowToDeck);
+}
+
+export async function listMtgDeckTiles(): Promise<MtgDeckListItem[]> {
+  const decks = await listMtgDecks();
+  const rows = await pageAll((from, to) =>
+    supabase
+      .from('mtg_deck_cards')
+      .select('id, deck_id, board, color_identity')
+      .order('id', { ascending: true })
+      .range(from, to),
+  );
+  const byDeck = new Map<string, { board: DeckBoard; colorIdentity: string | null }[]>();
+  for (const row of rows) {
+    if (!isDeckBoard(row.board)) continue;
+    const cards = byDeck.get(row.deck_id) ?? [];
+    cards.push({ board: row.board, colorIdentity: row.color_identity });
+    byDeck.set(row.deck_id, cards);
+  }
+  return decks.map((deck) => ({
+    ...deck,
+    colors: deckTileIdentity(deck.format, byDeck.get(deck.id) ?? []),
+  }));
 }
 
 export async function getMtgDeck(id: string): Promise<MtgDeck | null> {
