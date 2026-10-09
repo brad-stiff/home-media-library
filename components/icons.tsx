@@ -1,7 +1,7 @@
-import { StyleSheet, View } from 'react-native';
+import { ColorValue, StyleSheet, View } from 'react-native';
 
 type IconProps = {
-  color: string;
+  color: ColorValue;
   size?: number;
 };
 
@@ -54,7 +54,11 @@ export function MenuIcon({ color, size = 18 }: IconProps) {
   );
 }
 
-export function ChevronIcon({ color, size = 12 }: IconProps) {
+export function ChevronIcon({
+  color,
+  size = 12,
+  direction = 'right',
+}: IconProps & { direction?: 'left' | 'right' }) {
   return (
     <View
       style={{
@@ -63,7 +67,7 @@ export function ChevronIcon({ color, size = 12 }: IconProps) {
         borderRightWidth: 2,
         borderBottomWidth: 2,
         borderColor: color,
-        transform: [{ rotate: '-45deg' }],
+        transform: [{ rotate: direction === 'left' ? '135deg' : '-45deg' }],
       }}
     />
   );

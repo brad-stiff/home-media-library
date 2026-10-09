@@ -2,6 +2,7 @@ import { Redirect, Stack, useSegments } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
+import { HeaderBackButton } from '../../components/HeaderBackButton';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { HouseholdProvider, useHousehold } from '../../lib/householdContext';
 import { spacing, typeScale, useTheme } from '../../lib/theme';
@@ -52,6 +53,9 @@ function AppNavigator() {
           headerTintColor: colors.text,
           headerTitleStyle: { fontWeight: '700' },
           headerShadowVisible: false,
+          headerBackButtonDisplayMode: 'minimal',
+          headerLeft: ({ canGoBack, tintColor }) =>
+            canGoBack ? <HeaderBackButton color={tintColor ?? colors.text} /> : null,
           contentStyle: { backgroundColor: colors.background },
         }}
       >
@@ -64,7 +68,7 @@ function AppNavigator() {
         <Stack.Screen name="household/index" options={{ title: 'Household' }} />
         <Stack.Screen
           name="household/gate"
-          options={{ title: 'Your household', headerBackVisible: false }}
+          options={{ title: 'Your household', headerBackVisible: false, headerLeft: () => null }}
         />
         <Stack.Screen name="household/join" options={{ title: 'Join household' }} />
         <Stack.Screen name="household/confirm-departure" options={{ title: 'Before you leave' }} />

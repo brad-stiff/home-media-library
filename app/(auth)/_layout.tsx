@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 
+import { HeaderBackButton } from '../../components/HeaderBackButton';
 import { useTheme } from '../../lib/theme';
 
 export default function AuthLayout() {
@@ -12,6 +13,9 @@ export default function AuthLayout() {
         headerTintColor: colors.text,
         headerTitleStyle: { fontWeight: '700' },
         headerShadowVisible: false,
+        headerBackButtonDisplayMode: 'minimal',
+        headerLeft: ({ canGoBack, tintColor }) =>
+          canGoBack ? <HeaderBackButton color={tintColor ?? colors.text} /> : null,
         contentStyle: { backgroundColor: colors.background },
       }}
     >

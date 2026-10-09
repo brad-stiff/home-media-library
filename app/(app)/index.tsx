@@ -1,9 +1,10 @@
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ColorValue, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ApiCredit } from '../../components/ApiCredit';
 import { EmptyState } from '../../components/EmptyState';
+import { HeaderBackButton } from '../../components/HeaderBackButton';
 import { HeaderMenu, useAppMenu } from '../../components/HeaderMenu';
 import { FilterChoices, LibraryDock } from '../../components/LibraryDock';
 import { FabAction, LibraryFab } from '../../components/LibraryFab';
@@ -346,20 +347,17 @@ export default function LibraryScreen() {
     navigation.setOptions({
       title: collectionTitle,
       headerLeft: showCollectionBack
-        ? () => (
-            <Pressable
+        ? ({ tintColor }: { tintColor?: ColorValue }) => (
+            <HeaderBackButton
+              color={tintColor ?? colors.text}
               onPress={leaveCollectionDrill}
-              accessibilityRole="button"
               accessibilityLabel="Back to collection overview"
-              style={styles.backButton}
-            >
-              <Text style={[typeScale.body, { color: colors.accent }]}>Back</Text>
-            </Pressable>
+            />
           )
         : () => null,
       headerRight: () => <HeaderMenu groups={menu} />,
     });
-  }, [navigation, menu, collectionTitle, showCollectionBack, leaveCollectionDrill, colors.accent]);
+  }, [navigation, menu, collectionTitle, showCollectionBack, leaveCollectionDrill, colors.text]);
 
   const selectTab = (next: DockType) => {
     if (!loadedScopes.current.has(scopeKey(next, mtgMode))) setLoading(true);
@@ -731,11 +729,6 @@ export default function LibraryScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  backButton: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingRight: spacing.md,
-  },
   results: { flex: 1 },
   searchTop: {
     paddingHorizontal: spacing.md,
