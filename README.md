@@ -1,4 +1,4 @@
-# Home Media Library
+# Alcove
 
 A mobile app for a household's movies, books, and Magic: The Gathering. Games and Pokémon are not in yet.
 

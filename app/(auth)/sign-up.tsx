@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { AlcoveMark } from '../../components/AlcoveMark';
 import { AuthLink, AuthTextField } from '../../components/AuthForm';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useAuth } from '../../lib/auth';
@@ -54,6 +55,7 @@ export default function SignUpScreen() {
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
+          <AlcoveMark />
           <Text style={[styles.title, { color: colors.text }]}>Create account</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             After this you will create a household or join one with an invite code.
@@ -105,7 +107,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
-    gap: spacing.sm,
+    gap: spacing.md,
     marginBottom: spacing.sm,
   },
   title: {

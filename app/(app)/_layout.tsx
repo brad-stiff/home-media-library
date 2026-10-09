@@ -55,7 +55,7 @@ function AppNavigator() {
           contentStyle: { backgroundColor: colors.background },
         }}
       >
-        <Stack.Screen name="index" options={{ title: 'My library' }} />
+        <Stack.Screen name="index" options={{ title: 'Alcove' }} />
         <Stack.Screen name="add" options={{ title: 'Add movie', presentation: 'modal' }} />
         <Stack.Screen name="add-book" options={{ title: 'Add book', presentation: 'modal' }} />
         <Stack.Screen name="edit-movie" options={{ title: 'Edit movie' }} />

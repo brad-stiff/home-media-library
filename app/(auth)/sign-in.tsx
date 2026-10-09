@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { AlcoveMark } from '../../components/AlcoveMark';
 import { AuthLink, AuthTextField } from '../../components/AuthForm';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useAuth } from '../../lib/auth';
@@ -49,6 +50,7 @@ export default function SignInScreen() {
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
+          <AlcoveMark />
           <Text style={[styles.title, { color: colors.text }]}>Welcome back</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
             Sign in to access your household media library.
@@ -90,7 +92,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
-    gap: spacing.sm,
+    gap: spacing.md,
     marginBottom: spacing.sm,
   },
   title: {

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "home-media-library",
+    "name": "Alcove",
     "slug": "home-media-library",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,13 +10,13 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Allow Home Media Library to scan barcodes on discs and books.",
-        "NSContactsUsageDescription": "Allow Home Media Library to copy a contact you choose into this household."
+        "NSCameraUsageDescription": "Allow Alcove to scan barcodes on discs and books.",
+        "NSContactsUsageDescription": "Allow Alcove to copy a contact you choose into this household."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#1A1C1E",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -32,14 +32,14 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Home Media Library to scan barcodes on discs and books.",
+          "cameraPermission": "Allow Alcove to scan barcodes on discs and books.",
           "barcodeScannerEnabled": true
         }
       ],
       [
         "expo-contacts",
         {
-          "contactsPermission": "Allow Home Media Library to copy a contact you choose into this household."
+          "contactsPermission": "Allow Alcove to copy a contact you choose into this household."
         }
       ]
     ]

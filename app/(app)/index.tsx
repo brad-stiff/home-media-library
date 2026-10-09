@@ -310,7 +310,7 @@ export default function LibraryScreen() {
       ? activeSetName
       : tab === 'mtg' && mtgMode === 'collection' && collectionScreen === 'all'
         ? 'All cards'
-        : 'My library';
+        : 'Alcove';
 
   const leaveCollectionDrill = useCallback(() => {
     setCollectionScreen('overview');

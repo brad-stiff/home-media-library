@@ -46,5 +46,5 @@ export function normalizeContactDraft(
 
 /** Share-sheet copy. This is an account invite, never a household join code. */
 export function appInviteMessage(email: string): string {
-  return `Create a Home Media Library account using ${email}. This does not add you to a household. Joining a home still uses that home's invite code.`;
+  return `Create an Alcove account using ${email}. This does not add you to a household. Joining a home still uses that home's invite code.`;
 }
