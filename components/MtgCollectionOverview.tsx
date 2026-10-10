@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
@@ -169,6 +169,13 @@ function isPad(item: GridTile): item is PadTile {
   return 'pad' in item;
 }
 
+/** One share of the measured row, so a short last row cannot grow past the other columns. */
+function columnWidth(listWidth: number): number {
+  const row = listWidth - spacing.md * 2;
+  const gaps = spacing.sm * (COLUMN_COUNT - 1);
+  return Math.max(0, (row - gaps) / COLUMN_COUNT);
+}
+
 function CompletionRing({
   percent,
   trackColor,
@@ -225,6 +232,10 @@ export function MtgCollectionOverview({
   footer,
 }: MtgCollectionOverviewProps) {
   const { colors } = useTheme();
+  const [listWidth, setListWidth] = useState(0);
+  const tileWidth = columnWidth(listWidth);
+  const columnStyle =
+    tileWidth > 0 ? { width: tileWidth, maxWidth: tileWidth, flexBasis: tileWidth, flexGrow: 0 } : null;
   const tiles = gridTiles(sets);
   const totals = [
     tally(copies, 'card', 'cards'),
@@ -240,6 +251,10 @@ export function MtgCollectionOverview({
       keyExtractor={(item) => item.code}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
+      onLayout={(event) => {
+        const next = event.nativeEvent.layout.width;
+        setListWidth((current) => (current === next ? current : next));
+      }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}
       ListFooterComponent={footer ? <View>{footer}</View> : null}
@@ -276,7 +291,7 @@ export function MtgCollectionOverview({
         ) : null
       }
       renderItem={({ item }) => {
-        if (isPad(item)) return <View style={styles.tile} />;
+        if (isPad(item)) return <View style={[styles.tile, columnStyle]} />;
         const copy = completionCopy(item);
         return (
           <Pressable
@@ -286,6 +301,7 @@ export function MtgCollectionOverview({
             style={({ pressed }) => [
               styles.tile,
               styles.tileFace,
+              columnStyle,
               { backgroundColor: colors.surface, borderColor: colors.border },
               pressed && styles.tilePressed,
             ]}
@@ -371,10 +387,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   tile: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minWidth: 0,
     alignItems: 'center',
     gap: spacing.xs,
     minHeight: 44,
+    overflow: 'hidden',
   },
   tileFace: {
     borderRadius: radius.md,
