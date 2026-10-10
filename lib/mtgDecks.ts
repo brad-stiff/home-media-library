@@ -8,6 +8,7 @@ import {
   isDeckBoard,
   isDeckFormat,
 } from './deckLegality';
+import { FinishCounts, sumCommittedDeckCopies } from './deckUsage';
 import { isDeckSleeveImageUrl } from './deckSleeve';
 import { sleeveById } from './dragonShield';
 import { Tables } from './database.types';
@@ -256,6 +257,38 @@ export async function listMtgDeckTiles(): Promise<MtgDeckListItem[]> {
     ...deck,
     colors: deckTileIdentity(deck.format, byDeck.get(deck.id) ?? []),
   }));
+}
+
+/** How many copies of this printing sit in active decks, split by finish. */
+export async function getPrintingDeckUsage(scryfallId: string): Promise<FinishCounts> {
+  const [decks, cards] = await Promise.all([
+    pageAll((from, to) =>
+      supabase
+        .from('mtg_decks')
+        .select('id')
+        .is('archived_at', null)
+        .order('id', { ascending: true })
+        .range(from, to),
+    ),
+    pageAll((from, to) =>
+      supabase
+        .from('mtg_deck_cards')
+        .select('id, deck_id, qty, foil, board')
+        .eq('scryfall_id', scryfallId)
+        .order('id', { ascending: true })
+        .range(from, to),
+    ),
+  ]);
+
+  return sumCommittedDeckCopies(
+    cards.map((card) => ({
+      deckId: card.deck_id,
+      qty: card.qty,
+      foil: card.foil,
+      board: card.board,
+    })),
+    new Set(decks.map((deck) => deck.id)),
+  );
 }
 
 export async function getMtgDeck(id: string): Promise<MtgDeck | null> {

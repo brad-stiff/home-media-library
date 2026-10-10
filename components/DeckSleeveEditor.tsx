@@ -78,17 +78,7 @@ export function DeckSleeveEditor({
   const body = (
     <View style={styles.block}>
       <View style={styles.summary}>
-        <View
-          style={[
-            styles.preview,
-            !sleeve && {
-              borderWidth: StyleSheet.hairlineWidth,
-              borderColor: colors.border,
-              borderRadius: radius.md,
-              backgroundColor: colors.surface,
-            },
-          ]}
-        >
+        <View style={styles.preview}>
           <SleeveFrame sleeve={sleeve}>
             <View style={[styles.previewFace, { backgroundColor: colors.surface }]} />
           </SleeveFrame>

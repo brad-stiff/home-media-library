@@ -7,7 +7,7 @@ import { partitionDecks } from '../../lib/deckSleeve';
 import { formatLabel } from '../../lib/deckLegality';
 import { sleeveById, sleeveLabel } from '../../lib/dragonShield';
 import { MtgDeckListItem } from '../../lib/mtgDecks';
-import { radius, spacing, typeScale, useTheme } from '../../lib/theme';
+import { spacing, typeScale, useTheme } from '../../lib/theme';
 import { EmptyState } from '../EmptyState';
 import { ManaIdentity } from '../MtgCollectionOverview';
 import { SleeveFrame } from '../SleeveFrame';
@@ -105,14 +105,7 @@ function DeckGrid({ decks, compact }: { decks: MtgDeckListItem[]; compact: boole
                 style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
               >
                 <SleeveFrame sleeve={sleeve}>
-                  <View
-                    style={[
-                      styles.tileInner,
-                      !sleeve && styles.tileFace,
-                      !sleeve && { backgroundColor: colors.surface, borderColor: colors.border },
-                      compact && styles.tileCompact,
-                    ]}
-                  >
+                  <View style={[styles.tileInner, compact && styles.tileCompact]}>
                     {item.sleeveImageUrl ? (
                       <Image
                         source={{ uri: item.sleeveImageUrl }}
@@ -227,11 +220,6 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs,
-  },
-  tileFace: {
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
   },
   tileCompact: {
     paddingVertical: spacing.xs,

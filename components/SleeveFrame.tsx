@@ -4,18 +4,17 @@ import { StyleSheet, View } from 'react-native';
 import { DragonSleeve } from '../lib/dragonShield';
 import { radius, useTheme } from '../lib/theme';
 
-/** Colored rim around a deck, matching the sleeve back and, for duals, the interior. */
+/** Each band is the same width, so matte, dual, and unsleeved tiles stay the same size. */
+const BAND = 4;
+
+/** Colored rim around a deck. Matte fills the rim. Dual splits it into two equal bands. */
 export function SleeveFrame({ sleeve, children }: { sleeve: DragonSleeve | null; children: ReactNode }) {
   const { colors } = useTheme();
-  if (!sleeve) return <>{children}</>;
+  const outer = sleeve?.outer ?? colors.border;
+  const inner = sleeve?.inner ?? outer;
   return (
-    <View style={[styles.outer, { backgroundColor: sleeve.outer, borderColor: colors.border }]}>
-      <View
-        style={[
-          styles.lip,
-          { backgroundColor: sleeve.inner ?? colors.surface, padding: sleeve.inner ? 2 : 0 },
-        ]}
-      >
+    <View style={[styles.outer, { backgroundColor: outer, borderColor: colors.border }]}>
+      <View style={[styles.band, { backgroundColor: inner }]}>
         <View style={[styles.face, { backgroundColor: colors.surface }]}>{children}</View>
       </View>
     </View>
@@ -25,15 +24,16 @@ export function SleeveFrame({ sleeve, children }: { sleeve: DragonSleeve | null;
 const styles = StyleSheet.create({
   outer: {
     width: '100%',
-    padding: 4,
+    padding: BAND,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
   },
-  lip: {
-    borderRadius: radius.md - 2,
+  band: {
+    padding: BAND,
+    borderRadius: radius.md - BAND,
   },
   face: {
-    borderRadius: radius.sm,
+    borderRadius: radius.md - BAND * 2,
     overflow: 'hidden',
   },
 });
