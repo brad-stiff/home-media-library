@@ -142,6 +142,9 @@ export type Database = {
           created_by_name: string | null;
           created_at: string;
           updated_at: string;
+          sleeve_id: string | null;
+          sleeve_image_url: string | null;
+          archived_at: string | null;
         },
         'household_id' | 'name'
       >;

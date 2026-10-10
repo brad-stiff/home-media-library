@@ -1,12 +1,16 @@
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { ReactNode } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { partitionDecks } from '../../lib/deckSleeve';
 import { formatLabel } from '../../lib/deckLegality';
+import { sleeveById, sleeveLabel } from '../../lib/dragonShield';
 import { MtgDeckListItem } from '../../lib/mtgDecks';
 import { radius, spacing, typeScale, useTheme } from '../../lib/theme';
 import { EmptyState } from '../EmptyState';
 import { ManaIdentity } from '../MtgCollectionOverview';
+import { SleeveFrame } from '../SleeveFrame';
 
 const COLUMN_COUNT = 3;
 const PIP_BOX = 72;
@@ -43,7 +47,21 @@ function colorPhrase(identity: string | null): string | null {
 
 function tileLabel(deck: MtgDeckListItem): string {
   const colors = colorPhrase(deck.colors);
-  return [deck.name, formatLabel(deck.format), colors, deck.archidektId ? 'from Archidekt' : null].filter(Boolean).join(', ');
+  const sleeve = sleeveById(deck.sleeveId);
+  return [
+    deck.name,
+    formatLabel(deck.format),
+    colors,
+    sleeve ? sleeveLabel(sleeve) : null,
+    deck.archivedAt ? 'archived' : null,
+    deck.archidektId ? 'from Archidekt' : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+}
+
+function tileMark(deck: MtgDeckListItem): string {
+  return [deck.archivedAt ? 'Archived' : null, deck.archidektId ? 'Archidekt' : null].filter(Boolean).join(' · ');
 }
 
 function gridTiles(decks: MtgDeckListItem[]): GridTile[] {
@@ -60,6 +78,70 @@ function isPad(item: GridTile): item is PadTile {
   return 'pad' in item;
 }
 
+function chunk<T>(items: T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let index = 0; index < items.length; index += size) rows.push(items.slice(index, index + size));
+  return rows;
+}
+
+function DeckGrid({ decks, compact }: { decks: MtgDeckListItem[]; compact: boolean }) {
+  const router = useRouter();
+  const { colors } = useTheme();
+  const pip = compact ? PIP_BOX_COMPACT : PIP_BOX;
+
+  return (
+    <View>
+      {chunk(gridTiles(decks), COLUMN_COUNT).map((row) => (
+        <View key={row.map((item) => item.id).join(':')} style={styles.row}>
+          {row.map((item) => {
+            if (isPad(item)) return <View key={item.id} style={styles.tile} />;
+            const sleeve = sleeveById(item.sleeveId);
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => router.push(`/mtg/deck/${item.id}`)}
+                accessibilityRole="button"
+                accessibilityLabel={tileLabel(item)}
+                style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
+              >
+                <SleeveFrame sleeve={sleeve}>
+                  <View
+                    style={[
+                      styles.tileInner,
+                      !sleeve && styles.tileFace,
+                      !sleeve && { backgroundColor: colors.surface, borderColor: colors.border },
+                      compact && styles.tileCompact,
+                    ]}
+                  >
+                    {item.sleeveImageUrl ? (
+                      <Image
+                        source={{ uri: item.sleeveImageUrl }}
+                        style={styles.sleevePhoto}
+                        contentFit="cover"
+                        accessibilityElementsHidden
+                      />
+                    ) : null}
+                    <ManaIdentity identity={item.colors} box={pip} />
+                    <Text style={[typeScale.caption, styles.name, { color: colors.text }]} numberOfLines={2}>
+                      {item.name}
+                    </Text>
+                    <Text style={[typeScale.caption, styles.detail, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {formatLabel(item.format)}
+                    </Text>
+                    <Text style={[typeScale.caption, styles.mark, { color: colors.textTertiary }]} numberOfLines={1}>
+                      {tileMark(item)}
+                    </Text>
+                  </View>
+                </SleeveFrame>
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function MtgDeckResults({
   decks,
   query,
@@ -71,9 +153,8 @@ export function MtgDeckResults({
   onRefresh,
   footer,
 }: MtgDeckResultsProps) {
-  const router = useRouter();
   const { colors } = useTheme();
-  const tiles = gridTiles(decks);
+  const { active, archived } = partitionDecks(decks);
 
   if (decks.length === 0) {
     return (
@@ -92,73 +173,76 @@ export function MtgDeckResults({
   }
 
   return (
-    <FlatList
-      data={tiles}
-      numColumns={COLUMN_COUNT}
-      columnWrapperStyle={styles.row}
-      keyExtractor={(item) => item.id}
+    <ScrollView
+      style={styles.scroll}
       keyboardDismissMode="on-drag"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}
-      ListFooterComponent={footer ? <View>{footer}</View> : null}
-      renderItem={({ item }) => {
-        if (isPad(item)) return <View style={styles.tile} />;
-        return (
-          <Pressable
-            onPress={() => router.push(`/mtg/deck/${item.id}`)}
-            accessibilityRole="button"
-            accessibilityLabel={tileLabel(item)}
-            style={({ pressed }) => [
-              styles.tile,
-              styles.tileFace,
-              compact && styles.tileCompact,
-              { backgroundColor: colors.surface, borderColor: colors.border },
-              pressed && styles.tilePressed,
-            ]}
-          >
-            <ManaIdentity identity={item.colors} box={compact ? PIP_BOX_COMPACT : PIP_BOX} />
-            <Text style={[typeScale.caption, styles.name, { color: colors.text }]} numberOfLines={2}>
-              {item.name}
-            </Text>
-            <Text style={[typeScale.caption, styles.detail, { color: colors.textSecondary }]} numberOfLines={1}>
-              {formatLabel(item.format)}
-            </Text>
-            <Text style={[typeScale.caption, styles.mark, { color: colors.textTertiary }]} numberOfLines={1}>
-              {item.archidektId ? 'Archidekt' : ''}
-            </Text>
-          </Pressable>
-        );
-      }}
-    />
+    >
+      {active.length > 0 ? (
+        <DeckGrid decks={active} compact={compact} />
+      ) : (
+        <Text style={[typeScale.body, styles.quiet, { color: colors.textSecondary }]}>No active decks</Text>
+      )}
+      {archived.length > 0 ? (
+        <View style={styles.archived}>
+          <Text style={[typeScale.label, { color: colors.text }]} accessibilityRole="header">
+            Archived
+          </Text>
+          <DeckGrid decks={archived} compact={compact} />
+        </View>
+      ) : null}
+      {footer ? <View>{footer}</View> : null}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+  },
   list: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
+  quiet: {
+    paddingVertical: spacing.md,
+  },
+  archived: {
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
   row: {
+    flexDirection: 'row',
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
   tile: {
     flex: 1,
+    minHeight: 44,
+  },
+  tileInner: {
     alignItems: 'center',
     gap: spacing.xs,
-    minHeight: 44,
+    width: '100%',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
   tileFace: {
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
+    overflow: 'hidden',
   },
   tileCompact: {
     paddingVertical: spacing.xs,
   },
   tilePressed: {
     opacity: 0.7,
+  },
+  sleevePhoto: {
+    width: '100%',
+    height: 36,
+    borderRadius: 6,
   },
   name: {
     fontWeight: '600',

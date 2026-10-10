@@ -11,7 +11,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Allow Alcove to scan barcodes on discs and books.",
-        "NSContactsUsageDescription": "Allow Alcove to copy a contact you choose into this household."
+        "NSContactsUsageDescription": "Allow Alcove to copy a contact you choose into this household.",
+        "NSPhotoLibraryUsageDescription": "Allow Alcove to attach a photo of a card sleeve."
       }
     },
     "android": {
@@ -40,6 +41,13 @@
         "expo-contacts",
         {
           "contactsPermission": "Allow Alcove to copy a contact you choose into this household."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Alcove to attach a photo of a card sleeve.",
+          "microphonePermission": false
         }
       ]
     ]

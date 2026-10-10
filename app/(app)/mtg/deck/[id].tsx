@@ -13,6 +13,7 @@ import {
 
 import { ActionMenu, ActionMenuItem } from '../../../../components/ActionMenu';
 import { ApiCredit } from '../../../../components/ApiCredit';
+import { DeckSleeveEditor } from '../../../../components/DeckSleeveEditor';
 import { FilterChoices } from '../../../../components/LibraryDock';
 import { MtgCardImage } from '../../../../components/MtgCardImage';
 import { PrimaryButton } from '../../../../components/PrimaryButton';
@@ -112,6 +113,7 @@ export default function MtgDeckDetailScreen() {
   const [writer, setWriter] = useState(false);
   const [createdByLabel, setCreatedByLabel] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [resyncing, setResyncing] = useState(false);
   const [busyCardId, setBusyCardId] = useState<string | null>(null);
   const [cardMenu, setCardMenu] = useState<{ title: string; actions: ActionMenuItem[] } | null>(null);
@@ -329,6 +331,21 @@ export default function MtgDeckDetailScreen() {
     }
   };
 
+  const toggleArchive = async () => {
+    if (!deck) return;
+    const archived = deck.archivedAt == null;
+    setArchiving(true);
+    try {
+      await updateMtgDeck(deck.id, { archived });
+      setDeck({ ...deck, archivedAt: archived ? new Date().toISOString() : null });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not update this deck.';
+      Alert.alert('Error', message);
+    } finally {
+      setArchiving(false);
+    }
+  };
+
   const handleDelete = () => {
     if (!deck) return;
     Alert.alert('Delete deck?', `Remove "${deck.name}"?`, [
@@ -401,9 +418,11 @@ export default function MtgDeckDetailScreen() {
             )}
             <Text style={[typeScale.caption, { color: colors.textSecondary }]}>
               {sizeLabel(deck.format, cards)}
+              {deck.archivedAt ? ' · Archived' : ''}
               {deck.archidektId ? ` · Archidekt ${deck.archidektId}` : ''}
               {createdByLabel ? ` · ${createdByLabel}` : ''}
             </Text>
+            <DeckSleeveEditor deck={deck} canEdit={canEdit} onChange={setDeck} />
             <View style={[styles.warnings, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={[typeScale.label, { color: colors.textSecondary }]}>Legality</Text>
               {!rulesReady ? (
@@ -426,6 +445,13 @@ export default function MtgDeckDetailScreen() {
             ) : null}
             {canEdit && deck.archidektId ? (
               <PrimaryButton label="Re-sync from Archidekt" onPress={handleResync} loading={resyncing} />
+            ) : null}
+            {canEdit ? (
+              <PrimaryButton
+                label={deck.archivedAt ? 'Restore deck' : 'Archive deck'}
+                onPress={() => void toggleArchive()}
+                loading={archiving}
+              />
             ) : null}
             {canEdit ? (
               <PrimaryButton label="Delete deck" onPress={handleDelete} loading={deleting} variant="danger" />

@@ -8,6 +8,8 @@ import {
   isDeckBoard,
   isDeckFormat,
 } from './deckLegality';
+import { isDeckSleeveImageUrl } from './deckSleeve';
+import { sleeveById } from './dragonShield';
 import { Tables } from './database.types';
 import { getMyHousehold } from './household';
 import { pageAll } from './pageAll';
@@ -33,6 +35,9 @@ export type MtgDeck = {
   createdByName: string | null;
   createdAt: string;
   updatedAt: string;
+  sleeveId: string | null;
+  sleeveImageUrl: string | null;
+  archivedAt: string | null;
 };
 
 /** A deck plus the colors its tile shows. '' is colorless. Null means the colors are not known yet. */
@@ -98,6 +103,9 @@ function rowToDeck(row: DeckRow): MtgDeck {
     createdByName: row.created_by_name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    sleeveId: row.sleeve_id,
+    sleeveImageUrl: row.sleeve_image_url,
+    archivedAt: row.archived_at,
   };
 }
 
@@ -294,15 +302,45 @@ export async function createMtgDeck(name: string, format: DeckFormat, descriptio
   return rowToDeck(data as DeckRow);
 }
 
-export async function updateMtgDeck(id: string, patch: { name?: string; format?: DeckFormat }): Promise<void> {
-  const row: { name?: string; format?: DeckFormat } = {};
+export async function updateMtgDeck(
+  id: string,
+  patch: {
+    name?: string;
+    format?: DeckFormat;
+    sleeveId?: string | null;
+    sleeveImageUrl?: string | null;
+    archived?: boolean;
+  },
+): Promise<void> {
+  const row: {
+    name?: string;
+    format?: DeckFormat;
+    sleeve_id?: string | null;
+    sleeve_image_url?: string | null;
+    archived_at?: string | null;
+  } = {};
   if (patch.name != null) {
     const name = patch.name.trim();
     if (!name) throw new Error('Enter a deck name.');
     row.name = name;
   }
   if (patch.format) row.format = patch.format;
-  if (!row.name && !row.format) return;
+  if (patch.sleeveId !== undefined) {
+    if (patch.sleeveId != null && !sleeveById(patch.sleeveId)) {
+      throw new Error('Choose a Dragon Shield sleeve color.');
+    }
+    row.sleeve_id = patch.sleeveId;
+  }
+  if (patch.sleeveImageUrl !== undefined) {
+    if (patch.sleeveImageUrl != null && !isDeckSleeveImageUrl(patch.sleeveImageUrl)) {
+      throw new Error('Could not save the sleeve photo.');
+    }
+    row.sleeve_image_url = patch.sleeveImageUrl;
+  }
+  if (patch.archived != null) {
+    row.archived_at = patch.archived ? new Date().toISOString() : null;
+  }
+  if (Object.keys(row).length === 0) return;
 
   const { data, error } = await supabase.from('mtg_decks').update(row).eq('id', id).select('id');
   if (error) throwDeckEdit(error);
