@@ -495,6 +495,12 @@ export default function LibraryScreen() {
           accessibilityLabel: 'Import a deck from Archidekt',
           onPress: () => router.push('/mtg/import'),
         },
+        {
+          id: 'create',
+          label: 'Create',
+          accessibilityLabel: 'Create an empty deck',
+          onPress: () => router.push('/mtg/create'),
+        },
       ];
     }
     if (tab === 'mtg') {
@@ -542,9 +548,14 @@ export default function LibraryScreen() {
   const onSetScreen = tab === 'mtg' && mtgMode === 'collection' && collectionScreen === 'set';
   const showLayout = tab !== 'mtg' || mtgMode === 'collection';
   const browsingEmpty = query.trim().length === 0 && (tab === 'mtg' || availability === 'all');
+  const onDecks = tab === 'mtg' && mtgMode === 'decks';
   const emptyAction =
-    writer && browsingEmpty && actions[0]
+    writer && browsingEmpty && !onDecks && actions[0]
       ? { label: actions[0].label, onPress: actions[0].onPress }
+      : undefined;
+  const deckEmptyActions =
+    writer && browsingEmpty && onDecks
+      ? actions.map((action) => ({ label: action.label, onPress: action.onPress }))
       : undefined;
 
   const filterParts: string[] = [];
@@ -746,7 +757,7 @@ export default function LibraryScreen() {
             query={query}
             writer={writer}
             compact={compact}
-            emptyAction={emptyAction}
+            emptyActions={deckEmptyActions}
             bottomPad={listPad}
             refreshing={refreshing}
             onRefresh={onRefresh}

@@ -7,20 +7,24 @@ interface EmptyStateProps {
   title: string;
   message: string;
   action?: { label: string; onPress: () => void };
+  actions?: { label: string; onPress: () => void }[];
   refreshing?: boolean;
   onRefresh?: () => void;
 }
 
-export function EmptyState({ title, message, action, refreshing = false, onRefresh }: EmptyStateProps) {
+export function EmptyState({ title, message, action, actions, refreshing = false, onRefresh }: EmptyStateProps) {
   const { colors } = useTheme();
+  const buttons = actions && actions.length > 0 ? actions : action ? [action] : [];
 
   const body = (
     <View style={styles.container}>
       <Text style={[styles.title, typeScale.title, { color: colors.text }]}>{title}</Text>
       <Text style={[styles.message, typeScale.body, { color: colors.textSecondary }]}>{message}</Text>
-      {action ? (
+      {buttons.length > 0 ? (
         <View style={styles.action}>
-          <PrimaryButton label={action.label} onPress={action.onPress} />
+          {buttons.map((button) => (
+            <PrimaryButton key={button.label} label={button.label} onPress={button.onPress} />
+          ))}
         </View>
       ) : null}
     </View>
@@ -58,5 +62,6 @@ const styles = StyleSheet.create({
   action: {
     alignSelf: 'stretch',
     marginTop: spacing.sm,
+    gap: spacing.sm,
   },
 });

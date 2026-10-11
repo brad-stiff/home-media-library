@@ -11,20 +11,14 @@ import {
 } from 'react-native';
 
 import { ApiCredit } from '../../../components/ApiCredit';
-import { FilterChoices } from '../../../components/LibraryDock';
 import { MediaGate } from '../../../components/MediaGate';
 import { AuthTextField } from '../../../components/AuthForm';
 import { PrimaryButton } from '../../../components/PrimaryButton';
 import { WriterOnly } from '../../../components/WriterOnly';
 import { fetchArchidektDeck } from '../../../lib/archidekt';
 import { DeckFormat } from '../../../lib/deckLegality';
-import { createMtgDeck, importArchidektDeck } from '../../../lib/mtgDecks';
+import { importArchidektDeck } from '../../../lib/mtgDecks';
 import { spacing, useTheme } from '../../../lib/theme';
-
-const FORMATS: { id: DeckFormat; label: string }[] = [
-  { id: 'commander', label: 'Commander' },
-  { id: 'standard', label: 'Standard' },
-];
 
 function askDeckFormat(): Promise<DeckFormat | null> {
   return new Promise((resolve) => {
@@ -44,10 +38,7 @@ function ImportMtgDeckScreen() {
   const router = useRouter();
   const { colors } = useTheme();
   const [archidekt, setArchidekt] = useState('');
-  const [blankName, setBlankName] = useState('');
-  const [format, setFormat] = useState<DeckFormat>('commander');
   const [importing, setImporting] = useState(false);
-  const [creating, setCreating] = useState(false);
 
   const handleImport = async () => {
     setImporting(true);
@@ -62,23 +53,6 @@ function ImportMtgDeckScreen() {
       Alert.alert('Archidekt import', message);
     } finally {
       setImporting(false);
-    }
-  };
-
-  const handleCreateBlank = async () => {
-    if (!blankName.trim()) {
-      Alert.alert('Name required', 'Enter a deck name.');
-      return;
-    }
-    setCreating(true);
-    try {
-      const deck = await createMtgDeck(blankName, format);
-      router.replace(`/mtg/deck/${deck.id}`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not create deck.';
-      Alert.alert('Error', message);
-    } finally {
-      setCreating(false);
     }
   };
 
@@ -109,18 +83,6 @@ function ImportMtgDeckScreen() {
             loading={importing}
             disabled={!archidekt.trim()}
           />
-        </View>
-
-        <View style={styles.section}>
-          <Text style={[styles.title, { color: colors.text }]}>Or create an empty deck</Text>
-          <AuthTextField
-            label="Deck name"
-            value={blankName}
-            onChangeText={setBlankName}
-            placeholder="My Commander deck"
-          />
-          <FilterChoices label="Format" options={FORMATS} value={format} onChange={setFormat} />
-          <PrimaryButton label="Create deck" onPress={handleCreateBlank} loading={creating} />
         </View>
         <ApiCredit providers={['archidekt', 'scryfall']} />
       </ScrollView>

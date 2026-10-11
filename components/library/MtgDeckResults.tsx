@@ -24,7 +24,7 @@ type MtgDeckResultsProps = {
   query: string;
   writer: boolean;
   compact: boolean;
-  emptyAction?: { label: string; onPress: () => void };
+  emptyActions?: { label: string; onPress: () => void }[];
   bottomPad: number;
   refreshing: boolean;
   onRefresh: () => void;
@@ -140,7 +140,7 @@ export function MtgDeckResults({
   query,
   writer,
   compact,
-  emptyAction,
+  emptyActions,
   bottomPad,
   refreshing,
   onRefresh,
@@ -158,7 +158,7 @@ export function MtgDeckResults({
             ? 'Create a Commander or Standard deck, or import one from Archidekt.'
             : 'Decks imported by your household will show up here.'
         }
-        action={emptyAction}
+        actions={emptyActions}
         refreshing={refreshing}
         onRefresh={onRefresh}
       />
