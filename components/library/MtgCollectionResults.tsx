@@ -224,23 +224,16 @@ function ChecklistRow({
   const nameColor = muted ? colors.textTertiary : colors.text;
   const captionColor = muted ? colors.textTertiary : colors.textSecondary;
 
-  const setGrid = offerUnowned && layout === 'grid';
-  const onImage = setGrid
-    ? ownedId
-      ? () => onOpen(ownedId)
-      : undefined
-    : ownedId
-      ? () => onOpen(ownedId)
-      : writer && onAdd && !adding
-        ? () => onAdd(scryfallId, false)
-        : undefined;
+  const onImage = ownedId
+    ? () => onOpen(ownedId)
+    : !offerUnowned && writer && onAdd && !adding
+      ? () => onAdd(scryfallId, false)
+      : undefined;
 
   const imageLabel = muted
     ? adding
       ? `${name}, adding`
-      : writer
-        ? `${name}, not owned, add non-foil`
-        : `${name}, not owned`
+      : `${name}, not owned`
     : `${name}, ${
         single
           ? single.qty
@@ -306,6 +299,44 @@ function ChecklistRow({
 
   const metaLine = [setCode?.toUpperCase(), collectorNumber].filter(Boolean).join(' · ');
 
+  const setCaption = (
+    <>
+      <Text
+        style={
+          layout === 'grid'
+            ? [styles.bookTitle, styles.setTitle, { color: nameColor }]
+            : [typeScale.body, styles.setTitle, { color: nameColor, fontWeight: '600' }]
+        }
+        numberOfLines={2}
+      >
+        {collectorNumber ? `${collectorNumber} : ${name}` : name}
+      </Text>
+      <View style={styles.stepperRow}>
+        <SetFinishStepper
+          name={name}
+          card={nonfoil}
+          foil={false}
+          busy={adding}
+          editable={nonfoil != null && (canAdjust?.(nonfoil) ?? false)}
+          canAdd={writer && offerUnowned && nonfoil == null}
+          onAdd={onAdd ? () => onAdd(scryfallId, false) : undefined}
+          onAdjust={onAdjust}
+        />
+        <View style={[styles.stepperRule, { backgroundColor: colors.border }]} />
+        <SetFinishStepper
+          name={name}
+          card={foilCard}
+          foil
+          busy={adding}
+          editable={foilCard != null && (canAdjust?.(foilCard) ?? false)}
+          canAdd={writer && offerUnowned && foilCard == null}
+          onAdd={onAdd ? () => onAdd(scryfallId, true) : undefined}
+          onAdjust={onAdjust}
+        />
+      </View>
+    </>
+  );
+
   const rowStyle =
     layout === 'grid'
       ? [styles.bookItem, compact && styles.bookItemCompact]
@@ -356,35 +387,8 @@ function ChecklistRow({
     layout === 'grid' ? (
       <>
         {image}
-        {setGrid ? (
-          <>
-            <Text style={[styles.bookTitle, styles.setTitle, { color: nameColor }]} numberOfLines={2}>
-              {collectorNumber ? `${collectorNumber} : ${name}` : name}
-            </Text>
-            <View style={styles.stepperRow}>
-              <SetFinishStepper
-                name={name}
-                card={nonfoil}
-                foil={false}
-                busy={adding}
-                editable={nonfoil != null && (canAdjust?.(nonfoil) ?? false)}
-                canAdd={writer && offerUnowned && nonfoil == null}
-                onAdd={onAdd ? () => onAdd(scryfallId, false) : undefined}
-                onAdjust={onAdjust}
-              />
-              <View style={[styles.stepperRule, { backgroundColor: colors.border }]} />
-              <SetFinishStepper
-                name={name}
-                card={foilCard}
-                foil
-                busy={adding}
-                editable={foilCard != null && (canAdjust?.(foilCard) ?? false)}
-                canAdd={writer && offerUnowned && foilCard == null}
-                onAdd={onAdd ? () => onAdd(scryfallId, true) : undefined}
-                onAdjust={onAdjust}
-              />
-            </View>
-          </>
+        {offerUnowned ? (
+          setCaption
         ) : (
           <>
             <Text style={[styles.bookTitle, { color: nameColor }]} numberOfLines={2}>
@@ -401,15 +405,21 @@ function ChecklistRow({
       <>
         {image}
         <View style={styles.listMeta}>
-          <Text style={[typeScale.body, { color: nameColor, fontWeight: '600' }]} numberOfLines={2}>
-            {name}
-          </Text>
-          {metaLine ? (
-            <Text style={[typeScale.caption, { color: captionColor }]} numberOfLines={1}>
-              {metaLine}
-            </Text>
-          ) : null}
-          {finishes}
+          {offerUnowned ? (
+            setCaption
+          ) : (
+            <>
+              <Text style={[typeScale.body, { color: nameColor, fontWeight: '600' }]} numberOfLines={2}>
+                {name}
+              </Text>
+              {metaLine ? (
+                <Text style={[typeScale.caption, { color: captionColor }]} numberOfLines={1}>
+                  {metaLine}
+                </Text>
+              ) : null}
+              {finishes}
+            </>
+          )}
         </View>
         {ownedId ? (
           <Pressable
