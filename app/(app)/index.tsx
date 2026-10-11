@@ -38,14 +38,14 @@ import {
   withTabPrefs,
 } from '../../lib/libraryView';
 import { searchMoviesInLibrary } from '../../lib/movies';
-import { addMtgCardFromScryfall, attachCardBacks, attachColorIdentities, MtgCard, searchMtgCollection } from '../../lib/mtgCards';
+import { addMtgCardFromScryfall, attachCardBacks, attachColorIdentities, deleteMtgCard, MtgCard, searchMtgCollection, updateMtgCardQty } from '../../lib/mtgCards';
 import { cardInSet, cardMatchesQuery, checklistSize, collectionColorCounts, collectionCopyTotal, collectionPrintingTotal, filterSetSummaries, groupOwnedPrintings, ManaColor, mergePrintedChecklist, printingMatchesColor, PrintedSlot, SetCatalogEntry, sortByCollectorNumber, summarizeSets } from '../../lib/mtgOverview';
 import { loadMtgSetCatalog, loadPrintedChecklist } from '../../lib/mtgSets';
 import { getScryfallCard } from '../../lib/scryfall';
 import { listMtgDeckTiles, MtgDeckListItem } from '../../lib/mtgDecks';
 import { takeLibraryTab } from '../../lib/pendingLibraryTab';
 import { isTypeVisible, useProfile } from '../../lib/profile';
-import { isWriter } from '../../lib/roles';
+import { canDeleteOwned, isWriter } from '../../lib/roles';
 import { spacing, typeScale, useTheme } from '../../lib/theme';
 import { useToastLift } from '../../lib/toast';
 import { Movie } from '../../lib/types';
@@ -277,6 +277,45 @@ export default function LibraryScreen() {
       cancelled = true;
     };
   }, [collectionScreen, activeSetCode, activePrintedSize]);
+
+  const adjustFinish = useCallback((card: MtgCard, delta: number) => {
+    const next = card.qty + delta;
+    const apply = async () => {
+      const key = `${card.id}:${card.foil ? 'foil' : 'nonfoil'}`;
+      if (addingFinishRef.current) return;
+      addingFinishRef.current = key;
+      setAddingFinish({ scryfallId: card.scryfallId, foil: card.foil });
+      try {
+        if (next < 1) {
+          await deleteMtgCard(card.id);
+          setMtgCards((prev) => prev.filter((row) => row.id !== card.id));
+          return;
+        }
+        await updateMtgCardQty(card.id, next);
+        setMtgCards((prev) => prev.map((row) => (row.id === card.id ? { ...row, qty: next } : row)));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not update quantity.';
+        Alert.alert('Error', message);
+      } finally {
+        addingFinishRef.current = null;
+        setAddingFinish(null);
+      }
+    };
+
+    if (next < 1) {
+      const which = card.foil ? 'foil' : 'non-foil';
+      const other = mtgCards.some((row) => row.scryfallId === card.scryfallId && row.id !== card.id && row.foil !== card.foil);
+      const message = other
+        ? `Remove the ${which} copies of "${card.name}"?`
+        : `Remove "${card.name}" from the collection?`;
+      Alert.alert('Remove card?', message, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => void apply() },
+      ]);
+      return;
+    }
+    void apply();
+  }, [mtgCards]);
 
   const addFinish = useCallback(async (scryfallId: string, foil: boolean) => {
     const key = `${scryfallId}:${foil ? 'foil' : 'nonfoil'}`;
@@ -676,6 +715,10 @@ export default function LibraryScreen() {
             cards={mtgCards}
             entries={checklistEntries}
             onAddFinish={writer ? (scryfallId, foil) => void addFinish(scryfallId, foil) : undefined}
+            onAdjustFinish={writer ? adjustFinish : undefined}
+            canAdjustFinish={(card) =>
+              household != null && canDeleteOwned(household.role, card.addedBy, user?.id ?? null)
+            }
             addingFinish={addingFinish}
             screen={collectionScreen}
             writer={writer}
