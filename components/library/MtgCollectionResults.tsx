@@ -421,7 +421,20 @@ function ChecklistRow({
             </>
           )}
         </View>
-        {ownedId ? (
+        {offerUnowned ? (
+          <View style={styles.listChevron}>
+            {ownedId ? (
+              <Pressable
+                onPress={() => onOpen(ownedId)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${name}`}
+                hitSlop={8}
+              >
+                <ChevronIcon color={colors.textTertiary} />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : ownedId ? (
           <Pressable
             onPress={() => onOpen(ownedId)}
             accessibilityRole="button"
@@ -582,6 +595,11 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   listMeta: { flex: 1, gap: 2 },
+  listChevron: {
+    width: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   singleBody: {
     flex: 1,
     flexDirection: 'row',
