@@ -83,6 +83,7 @@ function AppNavigator() {
         <Stack.Screen name="scan/confirm-book" options={{ title: 'Add book' }} />
         <Stack.Screen name="scan/confirm-movie" options={{ title: 'Add movie' }} />
         <Stack.Screen name="mtg/add" options={{ title: 'Add MTG card', presentation: 'modal' }} />
+        <Stack.Screen name="mtg/precon" options={{ title: 'Add precon' }} />
         <Stack.Screen name="mtg/import" options={{ title: 'Import deck' }} />
         <Stack.Screen name="mtg/create" options={{ title: 'Create deck' }} />
         <Stack.Screen name="mtg/card/[id]" options={{ title: '' }} />

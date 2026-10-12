@@ -1,6 +1,6 @@
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ApiCredit } from '../../../../components/ApiCredit';
 import { DetailHeader, DetailScroll, DetailSection } from '../../../../components/DetailLayout';
@@ -14,6 +14,17 @@ import { getPrintingDeckUsage } from '../../../../lib/mtgDecks';
 import { canDeleteOwned, isWriter } from '../../../../lib/roles';
 import { getScryfallCard } from '../../../../lib/scryfall';
 import { spacing, useTheme } from '../../../../lib/theme';
+
+function confirmRemove(title: string, message: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (globalThis.confirm(`${title}\n\n${message}`)) onConfirm();
+    return;
+  }
+  Alert.alert(title, message, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Remove', style: 'destructive', onPress: onConfirm },
+  ]);
+}
 
 export default function MtgCardDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -105,10 +116,7 @@ export default function MtgCardDetailScreen() {
       const message = other
         ? `Remove the ${which} copies of "${card.name}"?`
         : `Remove "${card.name}" from the collection?`;
-      Alert.alert('Remove card?', message, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => void apply() },
-      ]);
+      confirmRemove('Remove card?', message, () => void apply());
       return;
     }
     void apply();
@@ -241,15 +249,12 @@ export default function MtgCardDetailScreen() {
             label="Remove from library"
             onPress={() => {
               const both = printing.nonfoil != null && printing.foil != null;
-              Alert.alert(
+              confirmRemove(
                 'Remove card?',
                 both
                   ? `Remove "${card.name}" from the collection? This removes the non-foil and foil copies.`
                   : `Remove "${card.name}" from the collection?`,
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Remove', style: 'destructive', onPress: () => void removePrinting() },
-                ],
+                () => void removePrinting(),
               );
             }}
             loading={busy}

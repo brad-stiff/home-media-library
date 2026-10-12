@@ -506,6 +506,12 @@ export default function LibraryScreen() {
     if (tab === 'mtg') {
       return [
         { id: 'add', label: 'Add', accessibilityLabel: 'Add a card', onPress: () => router.push('/mtg/add') },
+        {
+          id: 'precon',
+          label: 'Precon',
+          accessibilityLabel: 'Add a Commander precon',
+          onPress: () => router.push('/mtg/precon'),
+        },
       ];
     }
     return [];

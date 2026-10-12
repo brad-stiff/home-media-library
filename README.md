@@ -41,7 +41,7 @@ Scan the QR code with Expo Go, or run `npm run ios`. `npm test` runs the unit te
 - Roles are admin, member, and viewer. The person who creates the household is an admin. Joining with the code makes you a viewer. Only admins see and regenerate the invite code.
 - Members add and edit. They can delete items they added. Admins can delete any item. Viewers can browse.
 - Movies from TMDb, with Blu-ray, 4K, and digital flags, plus barcode lookup. Books from Open Library, by ISBN scan or title search. One row per title.
-- MTG collection from Scryfall, with quantity and a separate row for foil. Decks are Commander or Standard. You can edit the list, see legality warnings, import from Archidekt, or start from an empty deck.
+- MTG collection from Scryfall, with quantity and a separate row for foil. Decks are Commander or Standard. You can edit the list, see legality warnings, import from Archidekt, start from an empty deck, or add a released Commander precon. The precon adds its cards to the collection, and can also be saved as a deck.
 - Checkout for physical movies and books. Borrowers are household contacts, not typed names. Loans can be returned or cancelled, and both stay in history. An admin can hide checkout for the whole household.
 - Settings: display name, light or dark appearance, which library tabs the household and you see, library layout, export, password, email, and account deletion.
 
@@ -49,6 +49,7 @@ Scan the QR code with Expo Go, or run `npm run ios`. `npm test` runs the unit te
 
 - The library stays behind Create or Join until you are in a household.
 - On the MTG tab, open **Filters** and choose **Decks**. **Import** is where you paste an Archidekt link or create an empty deck. Add cards from the deck screen.
+- On the collection side of the MTG tab, the add button includes **Precon**. Search by deck or set name, or open a product and pick the deck. The details page lists the cards. **Also add as a deck** is off until you turn it on.
 - **Contacts** is on the household screen and in Settings. Checkout picks someone from that list. An email can link an account outside this household, or share an invite to create one. That invite does not join them to the home.
 
 ## Tech stack
@@ -56,4 +57,4 @@ Scan the QR code with Expo Go, or run `npm run ios`. `npm test` runs the unit te
 - Expo (React Native) + TypeScript — SDK 57
 - Expo Router + expo-camera (barcode)
 - Supabase (Auth + Postgres + RLS)
-- TMDb, Open Library, UPCitemdb, Scryfall, Archidekt
+- TMDb, Open Library, UPCitemdb, Scryfall, Archidekt, MTGJSON

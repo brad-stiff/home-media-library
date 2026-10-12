@@ -169,6 +169,89 @@ export async function addMtgCardFromScryfall(
   return rowToCard(data);
 }
 
+const QTY_DENIED = 'Only the person who added this card, or an admin, can change the quantity.';
+
+function printingKey(scryfallId: string, foil: boolean): string {
+  return `${scryfallId}|${foil ? 'foil' : 'nonfoil'}`;
+}
+
+/** Adds each printing, combining copies of the same card and finish, and raising quantity when it is already owned. */
+export async function addMtgPrintingsFromScryfall(
+  printings: { card: ScryfallCard; qty: number; foil: boolean }[],
+): Promise<void> {
+  const combined = new Map<string, { card: ScryfallCard; qty: number; foil: boolean }>();
+  for (const printing of printings) {
+    const qty = printing.qty > 0 ? printing.qty : 1;
+    const key = printingKey(printing.card.id, printing.foil);
+    const existing = combined.get(key);
+    if (existing) existing.qty += qty;
+    else combined.set(key, { card: printing.card, qty, foil: printing.foil });
+  }
+  const rows = [...combined.values()];
+  if (rows.length === 0) return;
+
+  const household = await getMyHousehold();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const ids = [...new Set(rows.map((row) => row.card.id))];
+  const { data: owned, error: lookupError } = await supabase
+    .from('mtg_cards')
+    .select('id, scryfall_id, foil, qty, color_identity')
+    .eq('household_id', household.householdId)
+    .in('scryfall_id', ids);
+  if (lookupError) throw lookupError;
+
+  const ownedByKey = new Map(
+    (owned ?? []).map((row) => [printingKey(row.scryfall_id, row.foil), row]),
+  );
+  const inserts = [];
+  for (const row of rows) {
+    const current = ownedByKey.get(printingKey(row.card.id, row.foil));
+    if (current) {
+      const { data, error } = await supabase
+        .from('mtg_cards')
+        .update({
+          qty: current.qty + row.qty,
+          color_identity: current.color_identity ?? colorIdentityKey(row.card.color_identity),
+        })
+        .eq('id', current.id)
+        .select('id');
+      if (error) {
+        if (error.code === '42501' || error.message.toLowerCase().includes('policy')) throw new Error(QTY_DENIED);
+        throw error;
+      }
+      if (!data?.length) throw new Error(QTY_DENIED);
+      continue;
+    }
+    const card = row.card;
+    inserts.push({
+      household_id: household.householdId,
+      scryfall_id: card.id,
+      oracle_id: card.oracle_id ?? null,
+      name: scryfallDisplayName(card),
+      set_code: card.set ?? null,
+      set_name: card.set_name ?? null,
+      collector_number: card.collector_number ?? null,
+      mana_cost: card.mana_cost ?? card.card_faces?.[0]?.mana_cost ?? null,
+      type_line: card.type_line ?? null,
+      rarity: card.rarity ?? null,
+      image_uri: scryfallImageUri(card, 'normal'),
+      back_image_uri: scryfallBackImageUri(card, 'normal'),
+      back_resolved: true,
+      qty: row.qty,
+      foil: row.foil,
+      color_identity: colorIdentityKey(card.color_identity),
+      added_by: user?.id ?? null,
+    });
+  }
+
+  for (let index = 0; index < inserts.length; index += 200) {
+    const { error } = await supabase.from('mtg_cards').insert(inserts.slice(index, index + 200));
+    if (error) throw error;
+  }
+}
+
 export async function updateMtgCardQty(id: string, qty: number): Promise<void> {
   if (qty < 1) {
     await deleteMtgCard(id);

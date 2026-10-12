@@ -1,4 +1,4 @@
-export type ApiProvider = 'tmdb' | 'openLibrary' | 'scryfall' | 'archidekt';
+export type ApiProvider = 'tmdb' | 'openLibrary' | 'scryfall' | 'archidekt' | 'mtgjson';
 
 export const API_CREDITS: { id: ApiProvider; name: string; notice: string }[] = [
   {
@@ -21,6 +21,11 @@ export const API_CREDITS: { id: ApiProvider; name: string; notice: string }[] = 
     id: 'archidekt',
     name: 'Archidekt',
     notice: 'Deck lists imported from Archidekt. Cards resolve through Scryfall.',
+  },
+  {
+    id: 'mtgjson',
+    name: 'MTGJSON',
+    notice: 'Commander precon lists from MTGJSON. Cards resolve through Scryfall.',
   },
 ];
 

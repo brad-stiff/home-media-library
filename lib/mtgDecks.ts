@@ -311,6 +311,25 @@ export async function getMtgDeckCards(deckId: string): Promise<MtgDeckCard[]> {
     .sort((a, b) => BOARD_ORDER[a.board] - BOARD_ORDER[b.board] || a.name.localeCompare(b.name));
 }
 
+export async function createMtgDeckWithCards(
+  name: string,
+  format: DeckFormat,
+  cards: DeckCardDraft[],
+): Promise<MtgDeck> {
+  const deck = await createMtgDeck(name, format);
+  try {
+    await insertDrafts(deck.id, cards);
+    return deck;
+  } catch (error) {
+    try {
+      await deleteMtgDeck(deck.id);
+    } catch {
+      // The empty deck remains when it cannot be removed.
+    }
+    throw error;
+  }
+}
+
 export async function createMtgDeck(name: string, format: DeckFormat, description?: string): Promise<MtgDeck> {
   const trimmed = name.trim();
   if (!trimmed) throw new Error('Enter a deck name.');
