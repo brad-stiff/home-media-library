@@ -104,7 +104,7 @@ function DeckGrid({ decks, compact }: { decks: MtgDeckListItem[]; compact: boole
                 accessibilityLabel={tileLabel(item)}
                 style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
               >
-                <SleeveFrame sleeve={sleeve}>
+                <SleeveFrame sleeve={sleeve} fill>
                   <View style={[styles.tileInner, compact && styles.tileCompact]}>
                     {item.sleeveImageUrl ? (
                       <Image
@@ -207,6 +207,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
