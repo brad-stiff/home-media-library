@@ -1,6 +1,6 @@
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ColorValue, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ColorValue, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ApiCredit } from '../../components/ApiCredit';
 import { EmptyState } from '../../components/EmptyState';
@@ -17,6 +17,7 @@ import { SegmentedControl } from '../../components/SegmentedControl';
 import { Book, searchBooksInLibrary } from '../../lib/books';
 import { Checkout, getActiveCheckoutsByItemIds } from '../../lib/checkouts';
 import { useAuth } from '../../lib/auth';
+import { errorMessage } from '../../lib/household';
 import { useHousehold } from '../../lib/householdContext';
 import {
   AVAILABILITY_FILTERS,
@@ -47,7 +48,8 @@ import { takeLibraryTab } from '../../lib/pendingLibraryTab';
 import { isTypeVisible, useProfile } from '../../lib/profile';
 import { canDeleteOwned, isWriter } from '../../lib/roles';
 import { spacing, typeScale, useTheme } from '../../lib/theme';
-import { useToastLift } from '../../lib/toast';
+import { shareMtgCardsCsv } from '../../lib/shareMtgCards';
+import { useToast, useToastLift } from '../../lib/toast';
 import { Movie } from '../../lib/types';
 
 type MtgMode = 'collection' | 'decks';
@@ -92,6 +94,9 @@ export default function LibraryScreen() {
   const { profile, loading: profileLoading, saveLibraryView } = useProfile();
   const writer = household ? isWriter(household.role) : false;
   const menu = useAppMenu();
+  const { showToast } = useToast();
+  const [exportingCards, setExportingCards] = useState(false);
+  const exportingCardsRef = useRef(false);
   const [tab, setTab] = useState<DockType | null>(null);
   const [mtgMode, setMtgMode] = useState<MtgMode>('collection');
   const [collectionScreen, setCollectionScreen] = useState<CollectionScreen>('overview');
@@ -358,6 +363,27 @@ export default function LibraryScreen() {
     setColorFilter(null);
     setQueries((prev) => ({ ...prev, 'mtg-collection': '' }));
   }, []);
+
+  const exportCards = useCallback(() => {
+    if (exportingCardsRef.current) return;
+    exportingCardsRef.current = true;
+    setExportingCards(true);
+    void (async () => {
+      try {
+        const shared = await shareMtgCardsCsv();
+        if (Platform.OS === 'ios') {
+          if (shared) showToast('Card list shared');
+        } else {
+          showToast('Card list ready');
+        }
+      } catch (error) {
+        Alert.alert('Could not export', errorMessage(error, 'Try again.'));
+      } finally {
+        exportingCardsRef.current = false;
+        setExportingCards(false);
+      }
+    })();
+  }, [showToast]);
 
   const openSet = useCallback((code: string) => {
     setActiveSetCode(code);
@@ -751,6 +777,8 @@ export default function LibraryScreen() {
             onOpenAll={openAllCards}
             selectedColor={colorFilter}
             onSelectColor={selectColor}
+            onExport={exportCards}
+            exporting={exportingCards}
             emptyAction={emptyAction}
             bottomPad={listPad}
             refreshing={refreshing}

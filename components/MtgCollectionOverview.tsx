@@ -125,6 +125,8 @@ type MtgCollectionOverviewProps = {
   onOpenSet: (code: string) => void;
   onOpenAll: () => void;
   onSelectColor: (color: ManaColor) => void;
+  onExport: () => void;
+  exporting: boolean;
   bottomPad: number;
   filtering: boolean;
   refreshing: boolean;
@@ -225,6 +227,8 @@ export function MtgCollectionOverview({
   onOpenSet,
   onOpenAll,
   onSelectColor,
+  onExport,
+  exporting,
   bottomPad,
   filtering,
   refreshing,
@@ -260,9 +264,31 @@ export function MtgCollectionOverview({
       ListFooterComponent={footer ? <View>{footer}</View> : null}
       ListHeaderComponent={
         <View style={styles.header}>
-          <Text accessibilityRole="summary" style={[typeScale.body, { color: colors.text }]}>
-            {totals}
-          </Text>
+          <View style={styles.totalsRow}>
+            <Text
+              accessibilityRole="summary"
+              style={[typeScale.body, styles.totals, { color: colors.text }]}
+            >
+              {totals}
+            </Text>
+            <Pressable
+              onPress={onExport}
+              disabled={exporting}
+              accessibilityRole="button"
+              accessibilityLabel="Export cards"
+              accessibilityState={{ disabled: exporting }}
+              style={styles.exportButton}
+            >
+              <Text
+                style={[
+                  typeScale.body,
+                  { color: exporting ? colors.textTertiary : colors.accent, fontWeight: '600' },
+                ]}
+              >
+                {exporting ? 'Exporting…' : 'Export'}
+              </Text>
+            </Pressable>
+          </View>
           {colorCounts ? (
             <>
               <ManaSymbolRow counts={colorCounts} selected={null} onSelect={onSelectColor} />
@@ -343,6 +369,20 @@ const styles = StyleSheet.create({
   header: {
     gap: spacing.sm,
     marginBottom: spacing.sm,
+  },
+  totalsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  totals: {
+    flex: 1,
+    minWidth: 0,
+  },
+  exportButton: {
+    flexShrink: 0,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   manaRow: {
     flexDirection: 'row',

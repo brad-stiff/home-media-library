@@ -30,6 +30,8 @@ type MtgCollectionResultsProps = {
   onOpenAll: () => void;
   selectedColor: ManaColor | null;
   onSelectColor: (color: ManaColor) => void;
+  onExport: () => void;
+  exporting: boolean;
   onAddFinish?: (scryfallId: string, foil: boolean) => void;
   onAdjustFinish?: (card: MtgCard, delta: number) => void;
   canAdjustFinish?: (card: MtgCard) => boolean;
@@ -467,6 +469,8 @@ export function MtgCollectionResults({
   onOpenAll,
   selectedColor,
   onSelectColor,
+  onExport,
+  exporting,
   onAddFinish,
   onAdjustFinish,
   canAdjustFinish,
@@ -507,6 +511,8 @@ export function MtgCollectionResults({
         onOpenSet={onOpenSet}
         onOpenAll={onOpenAll}
         onSelectColor={onSelectColor}
+        onExport={onExport}
+        exporting={exporting}
         bottomPad={bottomPad}
         filtering={filtering}
         refreshing={refreshing}
