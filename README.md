@@ -33,7 +33,41 @@ cp .env.example .env
 npm start
 ```
 
-Scan the QR code with Expo Go, or run `npm run ios`. `npm test` runs the unit tests. `npm run typecheck` checks types.
+`npm run ios` opens the iOS Simulator. `npm test` runs the unit tests. `npm run typecheck` checks types.
+
+### Expo Go on an iPhone
+
+This project is Expo SDK 57. Update **Expo Go** from the App Store before scanning. An older app will say the project is incompatible.
+
+On a physical iPhone, Expo Go opens a project from the dev server only when the phone and the computer are signed in to the same Expo account. The simulator does not have this requirement. Android does not have it yet.
+
+1. On the computer, sign in. `npx expo login` by itself asks for a username and password in the terminal, and a GitHub-only account has nothing to type there. Use the browser flag instead:
+
+```bash
+npx expo login --browser
+```
+
+Leave the terminal running, open the printed link, and choose **Continue with GitHub**. Then check the username:
+
+```bash
+npx expo whoami
+```
+
+2. Expo Go cannot use the GitHub button. Give that same Expo account a password at [expo.dev/settings](https://expo.dev/settings). If that page has no password field, use [expo.dev/reset-password](https://expo.dev/reset-password) with the account email.
+
+3. In Expo Go, tap the profile icon and sign in with the username from `npx expo whoami` and that password.
+
+4. Put the phone and computer on the same Wi-Fi, run `npm start`, and scan the QR code with the iPhone camera. If Expo Go already showed a sign-in error, tap **Try Again**. Signing in while the server is running is enough.
+
+If the phone still cannot reach the computer, stop the server and run:
+
+```bash
+npx expo start --tunnel
+```
+
+Then scan the new QR code.
+
+Alcove's email and password are the household account inside the app. They are separate from the Expo login.
 
 ## Features
 
