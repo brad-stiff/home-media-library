@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { ReactNode } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ReactNode, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { partitionDecks } from '../../lib/deckSleeve';
 import { formatLabel } from '../../lib/deckLegality';
@@ -12,9 +12,11 @@ import { EmptyState } from '../EmptyState';
 import { ManaIdentity } from '../MtgCollectionOverview';
 import { SleeveFrame } from '../SleeveFrame';
 
-const COLUMN_COUNT = 3;
 const PIP_BOX = 72;
 const PIP_BOX_COMPACT = 60;
+const MAX_COLUMNS = 3;
+/** Room beside the color identity so the deck name is not crushed into the card. */
+const MIN_TILE = PIP_BOX + spacing.xs * 2 + spacing.xl * 2;
 
 type PadTile = { id: string; pad: true };
 type GridTile = MtgDeckListItem | PadTile;
@@ -64,14 +66,36 @@ function tileMark(deck: MtgDeckListItem): string {
   return [deck.archivedAt ? 'Archived' : null, deck.archidektId ? 'Archidekt' : null].filter(Boolean).join(' · ');
 }
 
-function gridTiles(decks: MtgDeckListItem[]): GridTile[] {
+function gridTiles(decks: MtgDeckListItem[], columns: number): GridTile[] {
   if (decks.length === 0) return [];
-  const remainder = decks.length % COLUMN_COUNT;
+  const remainder = decks.length % columns;
   if (remainder === 0) return decks;
   return [
     ...decks,
-    ...Array.from({ length: COLUMN_COUNT - remainder }, (_, index) => ({ id: `pad-${index}`, pad: true as const })),
+    ...Array.from({ length: columns - remainder }, (_, index) => ({ id: `pad-${index}`, pad: true as const })),
   ];
+}
+
+/** Two columns on a phone; three once each card is wide enough for the identity and the name. */
+function columnCount(listWidth: number): number {
+  if (listWidth <= 0) return 2;
+  const row = listWidth - spacing.md * 2;
+  const fitted = Math.floor((row + spacing.sm) / (MIN_TILE + spacing.sm));
+  return Math.min(MAX_COLUMNS, Math.max(2, fitted));
+}
+
+/** One share of the measured row, so a short last row cannot grow past the other columns. */
+function columnWidth(listWidth: number, columns: number): number {
+  const row = listWidth - spacing.md * 2;
+  const gaps = spacing.sm * Math.max(0, columns - 1);
+  return Math.max(0, Math.floor((row - gaps) / columns));
+}
+
+function pipSize(tileWidth: number, compact: boolean): number {
+  const preferred = compact ? PIP_BOX_COMPACT : PIP_BOX;
+  const inner = tileWidth - spacing.xs * 2;
+  if (!(inner > 0)) return preferred;
+  return Math.min(preferred, inner);
 }
 
 function isPad(item: GridTile): item is PadTile {
@@ -84,17 +108,31 @@ function chunk<T>(items: T[], size: number): T[][] {
   return rows;
 }
 
-function DeckGrid({ decks, compact }: { decks: MtgDeckListItem[]; compact: boolean }) {
+function DeckGrid({
+  decks,
+  compact,
+  columns,
+  tileWidth,
+}: {
+  decks: MtgDeckListItem[];
+  compact: boolean;
+  columns: number;
+  tileWidth: number;
+}) {
   const router = useRouter();
   const { colors } = useTheme();
-  const pip = compact ? PIP_BOX_COMPACT : PIP_BOX;
+  const pip = pipSize(tileWidth, compact);
+  const columnStyle =
+    tileWidth > 0
+      ? { width: tileWidth, maxWidth: tileWidth, flexBasis: tileWidth, flexGrow: 0, flexShrink: 0 }
+      : null;
 
   return (
     <View>
-      {chunk(gridTiles(decks), COLUMN_COUNT).map((row) => (
+      {chunk(gridTiles(decks, columns), columns).map((row) => (
         <View key={row.map((item) => item.id).join(':')} style={styles.row}>
           {row.map((item) => {
-            if (isPad(item)) return <View key={item.id} style={styles.tile} />;
+            if (isPad(item)) return <View key={item.id} style={[styles.tile, columnStyle]} />;
             const sleeve = sleeveById(item.sleeveId);
             return (
               <Pressable
@@ -102,7 +140,7 @@ function DeckGrid({ decks, compact }: { decks: MtgDeckListItem[]; compact: boole
                 onPress={() => router.push(`/mtg/deck/${item.id}`)}
                 accessibilityRole="button"
                 accessibilityLabel={tileLabel(item)}
-                style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
+                style={({ pressed }) => [styles.tile, columnStyle, pressed && styles.tilePressed]}
               >
                 <SleeveFrame sleeve={sleeve} fill>
                   <View style={[styles.tileInner, compact && styles.tileCompact]}>
@@ -147,6 +185,11 @@ export function MtgDeckResults({
   footer,
 }: MtgDeckResultsProps) {
   const { colors } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const [listWidth, setListWidth] = useState(0);
+  const width = listWidth || windowWidth;
+  const columns = columnCount(width);
+  const tileWidth = columnWidth(width, columns);
   const { active, archived } = partitionDecks(decks);
 
   if (decks.length === 0) {
@@ -169,11 +212,15 @@ export function MtgDeckResults({
     <ScrollView
       style={styles.scroll}
       keyboardDismissMode="on-drag"
+      onLayout={(event) => {
+        const next = event.nativeEvent.layout.width;
+        setListWidth((current) => (current === next ? current : next));
+      }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       contentContainerStyle={[styles.list, { paddingBottom: bottomPad }]}
     >
       {active.length > 0 ? (
-        <DeckGrid decks={active} compact={compact} />
+        <DeckGrid decks={active} compact={compact} columns={columns} tileWidth={tileWidth} />
       ) : (
         <Text style={[typeScale.body, styles.quiet, { color: colors.textSecondary }]}>No active decks</Text>
       )}
@@ -182,7 +229,7 @@ export function MtgDeckResults({
           <Text style={[typeScale.label, { color: colors.text }]} accessibilityRole="header">
             Archived
           </Text>
-          <DeckGrid decks={archived} compact={compact} />
+          <DeckGrid decks={archived} compact={compact} columns={columns} tileWidth={tileWidth} />
         </View>
       ) : null}
       {footer ? <View>{footer}</View> : null}

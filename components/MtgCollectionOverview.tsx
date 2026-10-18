@@ -1,15 +1,17 @@
 import { Image } from 'expo-image';
 import { ReactNode, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
 import { ColorCount, MANA_COLORS, ManaColor, SetSummary } from '../lib/mtgOverview';
 import { radius, spacing, typeScale, useTheme } from '../lib/theme';
 import { ChevronIcon } from './icons';
 
-const COLUMN_COUNT = 3;
 const RING_SIZE = 72;
 const RING_STROKE = 4;
+const MAX_COLUMNS = 3;
+/** Room beside the ring so the set name is not crushed into the card. */
+const MIN_TILE = RING_SIZE + spacing.xs * 2 + spacing.xl * 2;
 
 const MANA_SYMBOLS: Record<ManaColor, { label: string; uri: string }> = {
   W: { label: 'White', uri: 'https://svgs.scryfall.io/card-symbols/W.svg' },
@@ -157,13 +159,13 @@ function completionRingPercent(set: SetSummary): number | null {
   return ratio;
 }
 
-function gridTiles(sets: SetSummary[]): GridTile[] {
+function gridTiles(sets: SetSummary[], columns: number): GridTile[] {
   if (sets.length === 0) return [];
-  const remainder = sets.length % COLUMN_COUNT;
+  const remainder = sets.length % columns;
   if (remainder === 0) return sets;
   return [
     ...sets,
-    ...Array.from({ length: COLUMN_COUNT - remainder }, (_, index) => ({ code: `pad-${index}`, pad: true as const })),
+    ...Array.from({ length: columns - remainder }, (_, index) => ({ code: `pad-${index}`, pad: true as const })),
   ];
 }
 
@@ -171,33 +173,53 @@ function isPad(item: GridTile): item is PadTile {
   return 'pad' in item;
 }
 
-/** One share of the measured row, so a short last row cannot grow past the other columns. */
-function columnWidth(listWidth: number): number {
+/** Two columns on a phone; three once each card is wide enough for the ring and the name. */
+function columnCount(listWidth: number): number {
+  if (listWidth <= 0) return 2;
   const row = listWidth - spacing.md * 2;
-  const gaps = spacing.sm * (COLUMN_COUNT - 1);
-  return Math.max(0, (row - gaps) / COLUMN_COUNT);
+  const fitted = Math.floor((row + spacing.sm) / (MIN_TILE + spacing.sm));
+  return Math.min(MAX_COLUMNS, Math.max(2, fitted));
+}
+
+/** One share of the measured row, so a short last row cannot grow past the other columns. */
+function columnWidth(listWidth: number, columns: number): number {
+  const row = listWidth - spacing.md * 2;
+  const gaps = spacing.sm * Math.max(0, columns - 1);
+  return Math.max(0, Math.floor((row - gaps) / columns));
+}
+
+function ringSizeFor(tileWidth: number): number {
+  const inner = tileWidth - spacing.xs * 2;
+  if (!(inner > 0)) return RING_SIZE;
+  return Math.min(RING_SIZE, inner);
 }
 
 function CompletionRing({
+  size,
   percent,
   trackColor,
   progressColor,
   children,
 }: {
+  size: number;
   percent: number | null;
   trackColor: string;
   progressColor: string;
   children: ReactNode;
 }) {
-  const radius = (RING_SIZE - RING_STROKE) / 2;
+  const radius = (size - RING_STROKE) / 2;
   const circumference = 2 * Math.PI * radius;
   const shown = percent == null ? 0 : Math.min(100, Math.max(0, percent));
   const dash = (shown / 100) * circumference;
-  const center = RING_SIZE / 2;
+  const center = size / 2;
 
   return (
-    <View style={styles.ring} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Svg width={RING_SIZE} height={RING_SIZE} style={styles.ringSvg}>
+    <View
+      style={[styles.ring, { width: size, height: size }]}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={styles.ringSvg}>
         <Circle cx={center} cy={center} r={radius} stroke={trackColor} strokeWidth={RING_STROKE} fill="none" />
         {shown > 0 ? (
           <Circle
@@ -236,11 +258,17 @@ export function MtgCollectionOverview({
   footer,
 }: MtgCollectionOverviewProps) {
   const { colors } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
   const [listWidth, setListWidth] = useState(0);
-  const tileWidth = columnWidth(listWidth);
+  const width = listWidth || windowWidth;
+  const columns = columnCount(width);
+  const tileWidth = columnWidth(width, columns);
+  const ringSize = ringSizeFor(tileWidth);
   const columnStyle =
-    tileWidth > 0 ? { width: tileWidth, maxWidth: tileWidth, flexBasis: tileWidth, flexGrow: 0 } : null;
-  const tiles = gridTiles(sets);
+    tileWidth > 0
+      ? { width: tileWidth, maxWidth: tileWidth, flexBasis: tileWidth, flexGrow: 0, flexShrink: 0 }
+      : null;
+  const tiles = gridTiles(sets, columns);
   const totals = [
     tally(copies, 'card', 'cards'),
     tally(printings, 'printing', 'printings'),
@@ -249,8 +277,9 @@ export function MtgCollectionOverview({
 
   return (
     <FlatList
+      key={columns}
       data={tiles}
-      numColumns={COLUMN_COUNT}
+      numColumns={columns}
       columnWrapperStyle={tiles.length > 0 ? styles.setRow : undefined}
       keyExtractor={(item) => item.code}
       keyboardShouldPersistTaps="handled"
@@ -332,11 +361,16 @@ export function MtgCollectionOverview({
               pressed && styles.tilePressed,
             ]}
           >
-            <CompletionRing percent={completionRingPercent(item)} trackColor={colors.border} progressColor={colors.accent}>
+            <CompletionRing
+              size={ringSize}
+              percent={completionRingPercent(item)}
+              trackColor={colors.border}
+              progressColor={colors.accent}
+            >
               {item.iconSvgUri ? (
                 <Image
                   source={{ uri: item.iconSvgUri }}
-                  style={styles.icon}
+                  style={{ width: Math.round(ringSize * 0.44), height: Math.round(ringSize * 0.44) }}
                   contentFit="contain"
                   tintColor={colors.text}
                   accessibilityLabel=""
@@ -446,8 +480,6 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   ring: {
-    width: RING_SIZE,
-    height: RING_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -460,10 +492,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     pointerEvents: 'none',
-  },
-  icon: {
-    width: 32,
-    height: 32,
   },
   name: {
     fontWeight: '600',
