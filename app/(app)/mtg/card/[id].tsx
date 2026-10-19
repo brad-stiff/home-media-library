@@ -1,6 +1,17 @@
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { ApiCredit } from '../../../../components/ApiCredit';
 import { DetailHeader, DetailScroll, DetailSection } from '../../../../components/DetailLayout';
@@ -13,7 +24,16 @@ import { addMtgCardFromScryfall, attachCardBacks, deleteMtgCard, getMtgPrinting,
 import { getPrintingDeckUsage } from '../../../../lib/mtgDecks';
 import { canDeleteOwned, isWriter } from '../../../../lib/roles';
 import { getScryfallCard } from '../../../../lib/scryfall';
-import { spacing, useTheme } from '../../../../lib/theme';
+import { radius, spacing, useTheme } from '../../../../lib/theme';
+
+const MAX_QTY = 2_147_483_647;
+
+function parseCopyCount(raw: string): number | null {
+  if (!/^\d+$/.test(raw)) return null;
+  const next = Number(raw);
+  if (!Number.isSafeInteger(next) || next > MAX_QTY) return null;
+  return next;
+}
 
 function confirmRemove(title: string, message: string, onConfirm: () => void) {
   if (Platform.OS === 'web') {
@@ -36,6 +56,7 @@ export default function MtgCardDetailScreen() {
   const [deckUsage, setDeckUsage] = useState<FinishCounts>({ nonfoil: 0, foil: 0 });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [qtyDraft, setQtyDraft] = useState<{ card: MtgCard; value: string } | null>(null);
   const writer = household ? isWriter(household.role) : false;
 
   const load = useCallback(async () => {
@@ -83,9 +104,8 @@ export default function MtgCardDetailScreen() {
   const canEditRow = (card: MtgCard) =>
     household != null && canDeleteOwned(household.role, card.addedBy, user?.id ?? null);
 
-  const changeQty = (card: MtgCard, delta: number) => {
-    if (!printing) return;
-    const next = card.qty + delta;
+  const commitQty = (card: MtgCard, next: number) => {
+    if (!printing || next === card.qty) return;
     const other = card.foil ? printing.nonfoil : printing.foil;
     const apply = async () => {
       setBusy(true);
@@ -120,6 +140,28 @@ export default function MtgCardDetailScreen() {
       return;
     }
     void apply();
+  };
+
+  const changeQty = (card: MtgCard, delta: number) => {
+    commitQty(card, card.qty + delta);
+  };
+
+  const openQty = (card: MtgCard) => {
+    if (busy) return;
+    setQtyDraft({ card, value: String(card.qty) });
+  };
+
+  const saveQtyDraft = () => {
+    if (!qtyDraft) return;
+    const next = parseCopyCount(qtyDraft.value);
+    if (next == null) return;
+    const card = qtyDraft.card;
+    setQtyDraft(null);
+    if (next < 1 && Platform.OS !== 'web') {
+      setTimeout(() => commitQty(card, next), 350);
+      return;
+    }
+    commitQty(card, next);
   };
 
   const addFinish = async (foil: boolean) => {
@@ -214,6 +256,7 @@ export default function MtgCardDetailScreen() {
               canAdd={writer && printing.nonfoil == null}
               busy={busy}
               onDelta={(delta) => printing.nonfoil && changeQty(printing.nonfoil, delta)}
+              onSet={() => printing.nonfoil && openQty(printing.nonfoil)}
               onAdd={() => void addFinish(false)}
             />
             <FinishQty
@@ -224,6 +267,7 @@ export default function MtgCardDetailScreen() {
               canAdd={writer && printing.foil == null}
               busy={busy}
               onDelta={(delta) => printing.foil && changeQty(printing.foil, delta)}
+              onSet={() => printing.foil && openQty(printing.foil)}
               onAdd={() => void addFinish(true)}
             />
             <CountCell label="Total" value={(printing.nonfoil?.qty ?? 0) + (printing.foil?.qty ?? 0)} headed />
@@ -263,7 +307,93 @@ export default function MtgCardDetailScreen() {
         ) : null}
         <ApiCredit providers={['scryfall']} />
       </DetailScroll>
+      {qtyDraft ? (
+        <QtyPrompt
+          finish={qtyDraft.card.foil ? 'foil' : 'non-foil'}
+          value={qtyDraft.value}
+          onChange={(value) => setQtyDraft((current) => (current ? { ...current, value } : current))}
+          onCancel={() => setQtyDraft(null)}
+          onSave={saveQtyDraft}
+        />
+      ) : null}
     </>
+  );
+}
+
+function QtyPrompt({
+  finish,
+  value,
+  onChange,
+  onCancel,
+  onSave,
+}: {
+  finish: string;
+  value: string;
+  onChange: (value: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  const { colors } = useTheme();
+  const inputRef = useRef<TextInput>(null);
+  const canSave = parseCopyCount(value) != null;
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onCancel} onShow={() => inputRef.current?.focus()}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.promptRoot}
+      >
+        <Pressable
+          onPress={onCancel}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+          style={[styles.promptBackdrop, { backgroundColor: colors.overlay }]}
+        />
+        <View style={[styles.prompt, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.promptTitle, { color: colors.text }]}>Set {finish} quantity</Text>
+          <Text style={[styles.promptHint, { color: colors.textSecondary }]}>
+            Type the number of copies. 0 removes this finish.
+          </Text>
+          <TextInput
+            ref={inputRef}
+            value={value}
+            onChangeText={(text) => onChange(text.replace(/\D/g, ''))}
+            onSubmitEditing={() => {
+              if (canSave) onSave();
+            }}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            selectTextOnFocus
+            accessibilityLabel={`${finish} quantity`}
+            placeholderTextColor={colors.placeholder}
+            style={[
+              styles.promptInput,
+              { color: colors.text, backgroundColor: colors.background, borderColor: colors.border },
+            ]}
+          />
+          <View style={styles.promptActions}>
+            <Pressable
+              onPress={onCancel}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+              style={styles.promptCancel}
+            >
+              <Text style={[styles.promptCancelLabel, { color: colors.textSecondary }]}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              onPress={onSave}
+              disabled={!canSave}
+              accessibilityRole="button"
+              accessibilityLabel="Save quantity"
+              accessibilityState={{ disabled: !canSave }}
+              style={[styles.promptSave, { backgroundColor: colors.accent, opacity: canSave ? 1 : 0.5 }]}
+            >
+              <Text style={[styles.promptSaveLabel, { color: colors.accentText }]}>Save</Text>
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -275,6 +405,7 @@ function FinishQty({
   canAdd,
   busy,
   onDelta,
+  onSet,
   onAdd,
 }: {
   label: string;
@@ -284,6 +415,7 @@ function FinishQty({
   canAdd: boolean;
   busy: boolean;
   onDelta: (delta: number) => void;
+  onSet: () => void;
   onAdd: () => void;
 }) {
   const { colors } = useTheme();
@@ -309,7 +441,27 @@ function FinishQty({
         ) : showPlus ? (
           <View style={styles.qtyButton} />
         ) : null}
-        <Text style={[styles.qty, { color: qty > 0 ? colors.text : colors.textTertiary }]}>{qty}</Text>
+        {canEdit ? (
+          <Pressable
+            onPress={onSet}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel={`Set ${finish} quantity, ${qty}`}
+            hitSlop={8}
+          >
+            <Text
+              style={[
+                styles.qty,
+                styles.qtySettable,
+                { color: qty > 0 ? colors.text : colors.textTertiary, textDecorationColor: colors.textSecondary },
+              ]}
+            >
+              {qty}
+            </Text>
+          </Pressable>
+        ) : (
+          <Text style={[styles.qty, { color: qty > 0 ? colors.text : colors.textTertiary }]}>{qty}</Text>
+        )}
         {showPlus ? (
           <Pressable
             onPress={() => (canEdit ? onDelta(1) : onAdd())}
@@ -386,6 +538,70 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     minWidth: 24,
     textAlign: 'center',
+  },
+  qtySettable: {
+    textDecorationLine: 'underline',
+  },
+  promptRoot: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 120,
+    paddingHorizontal: spacing.md,
+  },
+  promptBackdrop: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  prompt: {
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  promptTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  promptHint: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  promptInput: {
+    minHeight: 48,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  promptActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  promptCancel: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  promptCancelLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  promptSave: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+  },
+  promptSaveLabel: {
+    fontSize: 16,
+    fontWeight: '700',
   },
   qtyButton: {
     width: 36,
