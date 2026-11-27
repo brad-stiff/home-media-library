@@ -27,6 +27,7 @@ import {
   DeckSort,
   DOCK_LABELS,
   DockType,
+  isShippedDockType,
   LibraryDensity,
   LibraryLayout,
   MTG_COLLECTION_SORTS,
@@ -122,7 +123,7 @@ export default function LibraryScreen() {
 
   const visible = useMemo(() => {
     return visibleDockTabs(profile.libraryView.dockOrder, (type) => {
-      if (type === 'games' || type === 'pokemon') return false;
+      if (!isShippedDockType(type)) return false;
       if (!household) return true;
       return isTypeVisible(household, profile, type);
     });

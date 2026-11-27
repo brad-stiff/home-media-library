@@ -9,6 +9,7 @@ import {
 import { useHousehold } from '../../lib/householdContext';
 import {
   DOCK_LABELS,
+  isShippedDockType,
   moveDockTab,
   visibleDockTabs,
 } from '../../lib/libraryView';
@@ -73,7 +74,7 @@ export default function SettingsScreen() {
 
   const visibleDock = household
     ? visibleDockTabs(profile.libraryView.dockOrder, (type) => {
-        if (type === 'games' || type === 'pokemon') return false;
+        if (!isShippedDockType(type)) return false;
         return isTypeVisible(household, profile, type);
       })
     : [];
