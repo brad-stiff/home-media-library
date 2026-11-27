@@ -82,6 +82,7 @@ Alcove's email and password are the household account inside the app. They are s
 ## Planned
 
 - MTG camera card scan (on-device OCR, continuous queue, confirm uncertain printings before add). See [`docs/mtg-card-scanner-plan.md`](./docs/mtg-card-scanner-plan.md). Not built yet.
+- Books & movies overview screens (author buckets for books, genre buckets for movies; same overview → drill-in → all pattern as MTG). See [`docs/library-overview-plan.md`](./docs/library-overview-plan.md). Not built yet.
 
 ## Where things are
 
