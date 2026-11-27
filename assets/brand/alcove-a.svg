@@ -3,16 +3,14 @@
   <g
     fill="none"
     stroke="#FFFFFF"
-    stroke-width="6"
+    stroke-width="7"
     stroke-linecap="round"
     stroke-linejoin="miter"
     stroke-miterlimit="4"
   >
-    <!-- Short left wall, flat base, tall right stem -->
-    <path d="M36 72 V104 H92 V36"/>
-    <!-- Inner arch — same radius as outer (sweep=1 → arc goes above) -->
-    <path d="M36 72 A42 42 0 0 1 92 72"/>
-    <!-- Outer arch — identical curve, higher on the stem -->
-    <path d="M36 36 A42 42 0 0 1 92 36"/>
+    <!-- Wide, short bowl; stem only as tall as the outer arch needs -->
+    <path d="M16 70 V98 H112 V52"/>
+    <path d="M16 70 A64 64 0 0 1 112 70"/>
+    <path d="M16 52 A64 64 0 0 1 112 52"/>
   </g>
 </svg>
