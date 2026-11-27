@@ -84,6 +84,7 @@ Alcove's email and password are the household account inside the app. They are s
 - MTG camera card scan (on-device OCR, continuous queue, confirm uncertain printings before add). See [`docs/mtg-card-scanner-plan.md`](./docs/mtg-card-scanner-plan.md). Not built yet.
 - Books & movies overview screens (author buckets for books, genre buckets for movies; same overview → drill-in → all pattern as MTG). See [`docs/library-overview-plan.md`](./docs/library-overview-plan.md). Not built yet.
 - Games tab for video games (overview by platform tiles with console mark + count; board games deferred as a later mode on the same tab). See [`docs/games-plan.md`](./docs/games-plan.md). Not built yet.
+- Gift check: shareable link so a buyer can look up one title without browsing the library; answers include movie formats and MTG qty/foil. See [`docs/gift-check-plan.md`](./docs/gift-check-plan.md). Not built yet.
 
 ## Where things are
 
