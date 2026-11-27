@@ -1,5 +1,6 @@
 import { ColorValue, StyleSheet, Text, View } from 'react-native';
-import Svg, { G, Path, Rect } from 'react-native-svg';
+import { Image } from 'expo-image';
+import Svg, { Path } from 'react-native-svg';
 
 import { useTheme } from '../lib/theme';
 
@@ -17,44 +18,36 @@ const MARK_PATHS = [
   'M26 42 A50 50 0 0 1 102 42',
 ] as const;
 
-function AlcoveAPaths({ color }: { color: ColorValue }) {
-  return (
-    <G
-      fill="none"
-      stroke={typeof color === 'string' ? color : '#FFFFFF'}
-      strokeWidth={6.5}
-      strokeLinecap="round"
-      strokeLinejoin="miter"
-      strokeMiterlimit={4}
-    >
-      {MARK_PATHS.map((d) => (
-        <Path key={d} d={d} />
-      ))}
-    </G>
-  );
-}
-
 /** Geometric double-story a mark for auth and brand surfaces (black tile). */
 export function AlcoveMark({ size = 56 }: SizeProps) {
   return (
-    <Svg
-      width={size}
-      height={size}
-      viewBox="0 0 128 128"
-      accessibilityRole="image"
+    <Image
+      source={require('../assets/brand/alcove-a.png')}
+      style={{ width: size, height: size }}
+      contentFit="contain"
       accessibilityLabel="Alcove"
-    >
-      <Rect width="128" height="128" fill="#000000" />
-      <AlcoveAPaths color="#FFFFFF" />
-    </Svg>
+      accessibilityRole="image"
+    />
   );
 }
 
 /** Letter-only a for inline wordmarks; inherits tint from the surrounding title. */
 export function AlcoveALetter({ color, size = 22 }: TintedProps & { color: ColorValue }) {
+  const stroke = typeof color === 'string' ? color : '#FFFFFF';
   return (
     <Svg width={size} height={size} viewBox="0 0 128 128" accessibilityElementsHidden>
-      <AlcoveAPaths color={color} />
+      {MARK_PATHS.map((d) => (
+        <Path
+          key={d}
+          d={d}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={6.5}
+          strokeLinecap="round"
+          strokeLinejoin="miter"
+          strokeMiterlimit={4}
+        />
+      ))}
     </Svg>
   );
 }
