@@ -1,6 +1,6 @@
 # Alcove
 
-A mobile app for a household's movies, books, and Magic: The Gathering. Games and Pokémon are not in yet.
+A mobile app for a household's movies, books, and Magic: The Gathering. Games are not in yet. Pokémon cards are out of scope for v1.
 
 ## Getting started
 

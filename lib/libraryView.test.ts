@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   defaultLibraryView,
+  isShippedDockType,
   moveDockTab,
   parseLibraryView,
   resolveOpeningTab,
@@ -12,8 +13,6 @@ import {
   type DockType,
   type LibraryViewPrefs,
 } from './libraryView';
-
-const shipped = (type: DockType) => type === 'movies' || type === 'books' || type === 'mtg';
 
 describe('parseLibraryView', () => {
   it('fills defaults for an empty profile', () => {
@@ -26,7 +25,7 @@ describe('parseLibraryView', () => {
       opening: 'books',
       lastTab: 'movies',
       density: 'compact',
-      dockOrder: ['mtg', 'movies', 'mtg', 'nope'],
+      dockOrder: ['mtg', 'movies', 'mtg', 'nope', 'pokemon'],
       movies: { layout: 'list', sort: 'year', availability: 'out' },
       decks: { sort: 'added' },
       mtg: { sort: 'color' },
@@ -34,7 +33,7 @@ describe('parseLibraryView', () => {
     expect(parsed.opening).toBe('books');
     expect(parsed.lastTab).toBe('movies');
     expect(parsed.density).toBe('compact');
-    expect(parsed.dockOrder).toEqual(['mtg', 'movies', 'books', 'games', 'pokemon']);
+    expect(parsed.dockOrder).toEqual(['mtg', 'movies', 'books', 'games']);
     expect(parsed.movies).toEqual({ layout: 'list', sort: 'year', availability: 'out' });
     expect(parsed.books.layout).toBe('grid');
     expect(parsed.decks.sort).toBe('added');
@@ -43,22 +42,22 @@ describe('parseLibraryView', () => {
 });
 
 describe('dock order', () => {
-  const order: DockType[] = ['movies', 'books', 'games', 'mtg', 'pokemon'];
+  const order: DockType[] = ['movies', 'books', 'games', 'mtg'];
 
   it('shows only types the household and the user still allow', () => {
-    const visible = visibleDockTabs(order, (type) => shipped(type) && type !== 'books');
+    const visible = visibleDockTabs(order, (type) => isShippedDockType(type) && type !== 'books');
     expect(visible).toEqual(['movies', 'mtg']);
   });
 
   it('reorders visible tabs without revealing a hidden type', () => {
-    const visible = visibleDockTabs(order, shipped);
+    const visible = visibleDockTabs(order, isShippedDockType);
     const moved = moveDockTab(order, visible, 'mtg', -1);
-    expect(moved).toEqual(['movies', 'mtg', 'games', 'books', 'pokemon']);
-    expect(visibleDockTabs(moved, shipped)).toEqual(['movies', 'mtg', 'books']);
+    expect(moved).toEqual(['movies', 'mtg', 'games', 'books']);
+    expect(visibleDockTabs(moved, isShippedDockType)).toEqual(['movies', 'mtg', 'books']);
   });
 
   it('leaves the order alone at the ends', () => {
-    const visible = visibleDockTabs(order, shipped);
+    const visible = visibleDockTabs(order, isShippedDockType);
     expect(moveDockTab(order, visible, 'movies', -1)).toEqual(order);
     expect(moveDockTab(order, visible, 'mtg', 1)).toEqual(order);
   });

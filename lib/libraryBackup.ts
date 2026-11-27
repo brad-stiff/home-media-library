@@ -27,7 +27,7 @@ async function selectAll(table: HouseholdTable, householdId: string): Promise<un
   );
 }
 
-/** JSON backup of the tables that exist today. Games and Pokémon fields arrive with later phases. */
+/** JSON backup of the tables that exist today. Games fields arrive with a later phase. */
 export async function buildLibraryBackup(): Promise<LibraryBackup> {
   const household = await getMyHousehold();
   const [movies, books, mtgCards, decks, checkouts, contacts] = await Promise.all([

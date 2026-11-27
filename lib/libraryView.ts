@@ -1,6 +1,16 @@
-export const DOCK_TYPES = ['movies', 'books', 'games', 'mtg', 'pokemon'] as const;
+/** Dock ids known to prefs. `games` is reserved for a later phase; Pokémon cards are out of v1. */
+export const DOCK_TYPES = ['movies', 'books', 'games', 'mtg'] as const;
 
 export type DockType = (typeof DOCK_TYPES)[number];
+
+/** Tabs that ship in v1 (have screens and household/personal visibility). */
+export const SHIPPED_DOCK_TYPES = ['movies', 'books', 'mtg'] as const satisfies readonly DockType[];
+
+export type ShippedDockType = (typeof SHIPPED_DOCK_TYPES)[number];
+
+export function isShippedDockType(type: DockType): type is ShippedDockType {
+  return (SHIPPED_DOCK_TYPES as readonly DockType[]).includes(type);
+}
 
 export type LibraryLayout = 'grid' | 'list';
 
@@ -41,7 +51,6 @@ export type LibraryViewPrefs = {
   books: TabViewPrefs;
   games: TabViewPrefs;
   mtg: MtgTabViewPrefs;
-  pokemon: TabViewPrefs;
   decks: DeckViewPrefs;
 };
 
@@ -50,7 +59,6 @@ export const DOCK_LABELS: Record<DockType, string> = {
   books: 'Books',
   games: 'Games',
   mtg: 'MTG',
-  pokemon: 'Pokémon',
 };
 
 export const CATALOG_SORTS: { id: CatalogSort; label: string }[] = [
@@ -77,7 +85,7 @@ export const AVAILABILITY_FILTERS: { id: AvailabilityFilter; label: string }[] =
   { id: 'out', label: 'Checked out' },
 ];
 
-const DEFAULT_DOCK_ORDER: DockType[] = ['movies', 'books', 'games', 'mtg', 'pokemon'];
+const DEFAULT_DOCK_ORDER: DockType[] = ['movies', 'books', 'games', 'mtg'];
 
 function defaultTabPrefs(): TabViewPrefs {
   return { layout: 'grid', sort: 'title', availability: 'all' };
@@ -93,7 +101,6 @@ export function defaultLibraryView(): LibraryViewPrefs {
     books: defaultTabPrefs(),
     games: defaultTabPrefs(),
     mtg: defaultTabPrefs(),
-    pokemon: defaultTabPrefs(),
     decks: { sort: 'title' },
   };
 }
@@ -173,7 +180,6 @@ export function parseLibraryView(value: unknown): LibraryViewPrefs {
     books: parseTabPrefs(raw.books),
     games: parseTabPrefs(raw.games),
     mtg: parseMtgTabPrefs(raw.mtg),
-    pokemon: parseTabPrefs(raw.pokemon),
     decks: {
       sort:
         raw.decks && typeof raw.decks === 'object' && isDeckSort((raw.decks as { sort?: unknown }).sort)

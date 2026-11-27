@@ -14,7 +14,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { HeaderMenu, useAppMenu } from '../../components/HeaderMenu';
 import { LibraryDock } from '../../components/LibraryDock';
 import { useHousehold } from '../../lib/householdContext';
-import { visibleDockTabs } from '../../lib/libraryView';
+import { isShippedDockType, visibleDockTabs } from '../../lib/libraryView';
 import { queueLibraryTab } from '../../lib/pendingLibraryTab';
 import { isTypeVisible, useProfile } from '../../lib/profile';
 import { useToastLift } from '../../lib/toast';
@@ -88,7 +88,7 @@ export default function LoansScreen() {
   const tabs = useMemo(
     () =>
       visibleDockTabs(profile.libraryView.dockOrder, (type) => {
-        if (type === 'games' || type === 'pokemon') return false;
+        if (!isShippedDockType(type)) return false;
         if (!household) return true;
         return isTypeVisible(household, profile, type);
       }),
