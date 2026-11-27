@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" aria-label="Alcove">
+  <rect width="128" height="128" fill="#000000"/>
+  <g
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="6"
+    stroke-linecap="round"
+    stroke-linejoin="miter"
+    stroke-miterlimit="4"
+  >
+    <!-- Short left wall, flat base, tall right stem -->
+    <path d="M36 72 V104 H92 V36"/>
+    <!-- Inner arch — same radius as outer (sweep=1 → arc goes above) -->
+    <path d="M36 72 A42 42 0 0 1 92 72"/>
+    <!-- Outer arch — identical curve, higher on the stem -->
+    <path d="M36 36 A42 42 0 0 1 92 36"/>
+  </g>
+</svg>
