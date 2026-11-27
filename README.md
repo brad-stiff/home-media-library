@@ -79,6 +79,10 @@ Alcove's email and password are the household account inside the app. They are s
 - Checkout for physical movies and books. Borrowers are household contacts, not typed names. Loans can be returned or cancelled, and both stay in history. An admin can hide checkout for the whole household.
 - Settings: display name, light or dark appearance, which library tabs the household and you see, library layout, export, password, email, and account deletion.
 
+## Planned
+
+- MTG camera card scan (on-device OCR, continuous queue, confirm uncertain printings before add). See [`docs/mtg-card-scanner-plan.md`](./docs/mtg-card-scanner-plan.md). Not built yet.
+
 ## Where things are
 
 - The library stays behind Create or Join until you are in a household.
