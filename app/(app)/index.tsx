@@ -2,6 +2,7 @@ import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ColorValue, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AlcoveWordmark } from '../../components/AlcoveMark';
 import { ApiCredit } from '../../components/ApiCredit';
 import { EmptyState } from '../../components/EmptyState';
 import { HeaderBackButton } from '../../components/HeaderBackButton';
@@ -412,6 +413,10 @@ export default function LibraryScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({
       title: collectionTitle,
+      headerTitle:
+        collectionTitle === 'Alcove'
+          ? () => <AlcoveWordmark color={colors.text} />
+          : collectionTitle,
       headerLeft: showCollectionBack
         ? ({ tintColor }: { tintColor?: ColorValue }) => (
             <HeaderBackButton

@@ -2,6 +2,7 @@ import { Redirect, Stack, useSegments } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
+import { AlcoveWordmark } from '../../components/AlcoveMark';
 import { HeaderBackButton } from '../../components/HeaderBackButton';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { HouseholdProvider, useHousehold } from '../../lib/householdContext';
@@ -59,7 +60,13 @@ function AppNavigator() {
           contentStyle: { backgroundColor: colors.background },
         }}
       >
-        <Stack.Screen name="index" options={{ title: 'Alcove' }} />
+        <Stack.Screen
+          name="index"
+          options={{
+            title: 'Alcove',
+            headerTitle: () => <AlcoveWordmark color={colors.text} />,
+          }}
+        />
         <Stack.Screen name="add" options={{ title: 'Add movie', presentation: 'modal' }} />
         <Stack.Screen name="add-book" options={{ title: 'Add book', presentation: 'modal' }} />
         <Stack.Screen name="edit-movie" options={{ title: 'Edit movie' }} />
