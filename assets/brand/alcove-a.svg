@@ -8,8 +8,8 @@
     stroke-linejoin="miter"
     stroke-miterlimit="4"
   >
-    <path d="M28 70 V104 H100 V38"/>
-    <path d="M28 70 A48 48 0 0 1 100 70"/>
-    <path d="M28 38 A48 48 0 0 1 100 38"/>
+    <path d="M26 66 V98 H102 V42"/>
+    <path d="M26 66 A50 50 0 0 1 102 66"/>
+    <path d="M26 42 A50 50 0 0 1 102 42"/>
   </g>
 </svg>
